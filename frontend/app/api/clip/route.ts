@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import db from "@/lib/db";
-import { payment } from "@/lib/schema";
+import { payment, sudoUsers } from "@/lib/schema";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
@@ -11,14 +11,37 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const latestPayment = await db
-    .select()
-    .from(payment)
-    .where(eq(payment.userId, session.user.id))
-    .orderBy(payment.createdAt)
-    .limit(1);
+  const userEmail = session.user.email;
+  let isPremium = false;
 
-  if (latestPayment.length === 0 || latestPayment[0].status !== "active") {
+  // Check if user is a sudo user
+  if (userEmail) {
+    const sudoUser = await db
+      .select()
+      .from(sudoUsers)
+      .where(eq(sudoUsers.email, userEmail.toLowerCase()))
+      .limit(1);
+
+    if (sudoUser.length > 0) {
+      isPremium = true;
+    }
+  }
+
+  // If not sudo user, check payment status
+  if (!isPremium) {
+    const latestPayment = await db
+      .select()
+      .from(payment)
+      .where(eq(payment.userId, session.user.id))
+      .orderBy(payment.createdAt)
+      .limit(1);
+
+    if (latestPayment.length > 0 && latestPayment[0].status === "active") {
+      isPremium = true;
+    }
+  }
+
+  if (!isPremium) {
     return NextResponse.json({ error: "Forbidden: Premium subscription required" }, { status: 403 });
   }
 

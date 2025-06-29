@@ -8,6 +8,20 @@
       "when": 1746970952920,
       "tag": "0000_chunky_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1750840219110,
+      "tag": "0001_square_salo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1750840800079,
+      "tag": "0002_useful_blackheart",
+      "breakpoints": true
     }
   ]
 }

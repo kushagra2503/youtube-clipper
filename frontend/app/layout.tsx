@@ -11,39 +11,39 @@ const font = Host_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Clippa - Clean & Fast Video Clipper | HD YouTube Downloads",
+  title: "QuackQuery - AI Interview Assistant | Screen Reading & Audio Processing",
   description:
-    "Premium YouTube video clipper with zero ads. Download & clip HD videos with precise timestamps. Simple pricing, maximum quality. 📼",
+    "AI-powered interview assistant that sees your screen and hears your calls. Get real-time help with coding questions, behavioral interviews, and system design. Privacy-first with local processing. 🧠",
   keywords:
-    "video clipper, youtube downloader, HD video clips, video trimmer, youtube clips, clippa, clippa.in, youtube clipper, youtube video downloader, youtube video clipper, youtube video cutter, youtube video trimmer, youtube video editor, youtube video editor online, youtube video editor free, youtube video editor pro, youtube video editor premium, youtube video editor premium free, youtube video editor premium free download, youtube video editor premium free download online, youtube video editor premium free download online free, youtube video editor premium free download online free download, youtube video editor premium free download online free download free, youtube video editor premium free download online free download free download, ad free, premium",
+    "AI interview assistant, interview help, coding interview, behavioral interview, system design, screen reader AI, audio processing, interview preparation, job interview help, AI assistant, QuackQuery",
   icons: {
-    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📼</text></svg>",
+    icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
     shortcut:
-      "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📼</text></svg>",
+      "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
   },
   openGraph: {
-    url: "https://clippa.in/",
+    url: "https://quackquery.app/",
     type: "website",
     locale: "en_US",
-    siteName: "Clippa",
-    title: "Clippa - Clean & Fast Video Clipper | HD YouTube Downloads",
+    siteName: "QuackQuery",
+    title: "QuackQuery - AI Interview Assistant | Get Real-time Interview Help",
     description:
-      "Premium YouTube video clipper with zero ads. Download & clip HD videos with precise timestamps. Simple pricing, maximum quality.",
+      "AI interview assistant that sees your screen and hears your calls. Get instant help with coding, behavioral, and system design interviews. Privacy-first with local processing.",
     images: ["/og-image.png"],
   },
   other: {
     "twitter:image": ["/og-image.png"],
     "twitter:card": "summary_large_image",
-    "twitter:url": "https://clippa.in/",
-    "twitter:domain": "clippa.in",
-    "twitter:title": "Clippa - Clean & Fast Video Clipper",
+    "twitter:url": "https://quackquery.app/",
+    "twitter:domain": "quackquery.app",
+    "twitter:title": "QuackQuery - AI Interview Assistant",
     "twitter:description":
-      "Premium YouTube video clipper with zero ads. Download & clip HD videos with precise timestamps.",
-    "og:url": "https://clippa.in/",
+      "AI interview assistant that sees your screen and hears your calls. Get real-time help with coding questions, behavioral interviews, and system design.",
+    "og:url": "https://quackquery.app/",
     "og:type": "website",
-    "og:title": "Clippa - Clean & Fast Video Clipper | HD YouTube Downloads",
+    "og:title": "QuackQuery - AI Interview Assistant | Real-time Interview Help",
     "og:description":
-      "Premium YouTube video clipper with zero ads. Download & clip HD videos with precise timestamps. Simple pricing, maximum quality.",
+      "AI-powered interview assistant that sees your screen and hears your calls. Get instant help with coding, behavioral, and system design interviews. Privacy-first with local processing.",
     "og:image": ["/og-image.png"],
   },
   robots: {

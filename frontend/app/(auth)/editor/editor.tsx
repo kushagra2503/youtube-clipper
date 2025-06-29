@@ -6,16 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Loader2,
   LogOut,
   Monitor,
   Smartphone,
   Square,
   ArrowDown,
+  Settings,
+  Crown,
+  Shield,
 } from "lucide-react";
 import Image from "next/image";
 import Buy from "@/components/buy";
 import { motion, AnimatePresence } from "motion/react";
+import { useRouter } from "next/navigation";
 
 export default function Editor() {
   const [url, setUrl] = useState("");
@@ -24,6 +35,8 @@ export default function Editor() {
   const [addSubs, setAddSubs] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [isSudoUser, setIsSudoUser] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<{
     title?: string;
@@ -40,11 +53,26 @@ export default function Editor() {
   const { data: session } = authClient.useSession();
   const [downloadCount, setDownloadCount] = useState(0);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showAdminWelcome, setShowAdminWelcome] = useState(false);
+  const [showSudoWelcome, setShowSudoWelcome] = useState(false);
+  const router = useRouter();
   const getVideoId = (url: string) => {
-    const regExp =
+    // YouTube regex
+    const youtubeRegExp =
       /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
-    const match = url.match(regExp);
-    return match && match[7].length === 11 ? match[7] : null;
+    const youtubeMatch = url.match(youtubeRegExp);
+    if (youtubeMatch && youtubeMatch[7].length === 11) {
+      return youtubeMatch[7];
+    }
+    
+    // Instagram regex for reels and posts
+    const instagramRegExp = /instagram\.com\/(reel|p)\/([^\/\?]+)/;
+    const instagramMatch = url.match(instagramRegExp);
+    if (instagramMatch) {
+      return instagramMatch[2]; // Return the reel/post ID
+    }
+    
+    return null;
   };
 
   const fetchVideoMetadata = async (videoId: string | null) => {
@@ -52,7 +80,7 @@ export default function Editor() {
     setIsMetadataLoading(true);
 
     try {
-      const url = `https://www.youtube.com/watch?v=${videoId}`;
+      // Use the original URL for metadata fetching instead of constructing YouTube URL
       const metadataResponse = await fetch(
         `/api/metadata?url=${encodeURIComponent(url)}`
       );
@@ -64,11 +92,18 @@ export default function Editor() {
         description: metadata.description,
         thumbnail: metadata.thumbnail,
       });
-      setThumbnailUrl(
-        metadata.image
-          ? metadata.image
-          : `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-      );
+      
+      // Set thumbnail based on platform
+      if (url.includes('instagram.com')) {
+        setThumbnailUrl(metadata.image || null);
+      } else {
+        // YouTube fallback
+        setThumbnailUrl(
+          metadata.image
+            ? metadata.image
+            : `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+        );
+      }
 
       // Fetch formats
       const formatsResponse = await fetch(`/api/formats?url=${encodeURIComponent(url)}`);
@@ -82,10 +117,15 @@ export default function Editor() {
 
     } catch (error) {
       console.error("Error fetching metadata:", error);
-      // Fallback to YouTube thumbnail
-      setThumbnailUrl(
-        `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
-      );
+      // Platform-specific fallback
+      if (url.includes('instagram.com')) {
+        setThumbnailUrl(null);
+      } else {
+        // YouTube fallback
+        setThumbnailUrl(
+          `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+        );
+      }
     } finally {
       setIsMetadataLoading(false);
     }
@@ -115,26 +155,52 @@ export default function Editor() {
   }, [session?.user?.id]);
 
   useEffect(() => {
-    const checkPremiumStatus = async () => {
+    const checkUserStatus = async () => {
       try {
-        const response = await fetch("/api/user/premium");
-        const data = await response.json();
-        setIsPremium(data.isPremium);
-        setShowPremiumModal(!data.isPremium);
+        // Check premium status
+        const premiumResponse = await fetch("/api/user/premium");
+        const premiumData = await premiumResponse.json();
+        setIsPremium(premiumData.isPremium);
+        
+        const wasSudoUser = isSudoUser;
+        const newIsSudoUser = premiumData.isSudoUser || false;
+        setIsSudoUser(newIsSudoUser);
+        
+        // Show welcome popup if user just became a sudo user (first time check)
+        if (newIsSudoUser && !wasSudoUser) {
+          setShowSudoWelcome(true);
+        }
+        
+        // Only show premium modal if user is not premium and not a sudo user
+        setShowPremiumModal(!premiumData.isPremium && !premiumData.isSudoUser);
+
+        // Check admin status
+        const adminResponse = await fetch("/api/admin/setup");
+        if (adminResponse.ok) {
+          const adminData = await adminResponse.json();
+          const wasAdmin = isAdmin;
+          const newIsAdmin = adminData.currentUserIsAdmin || false;
+          setIsAdmin(newIsAdmin);
+          
+          // Show welcome popup if user just became admin (first time check)
+          if (newIsAdmin && !wasAdmin) {
+            setShowAdminWelcome(true);
+          }
+        }
       } catch (error) {
-        console.error("Error checking premium status:", error);
+        console.error("Error checking user status:", error);
       }
     };
 
     if (session?.user) {
-      checkPremiumStatus();
+      checkUserStatus();
     }
   }, [session]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isPremium) {
+    if (!isPremium && !isSudoUser) {
       setShowPremiumModal(true);
       return;
     }
@@ -238,7 +304,18 @@ export default function Editor() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               transition={{ delay: 0.4 }}
+              className="flex gap-2"
             >
+              {isAdmin && (
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={() => router.push('/admin')}
+                  title="Admin Panel"
+                >
+                  <Settings className="h-5 w-5" />
+                </Button>
+              )}
               <Button variant="destructive" size="icon" onClick={handleLogout}>
                 <LogOut className="h-5 w-5" />
               </Button>
@@ -256,7 +333,7 @@ export default function Editor() {
               exit={{ opacity: 0, y: -20 }}
               className="text-2xl lg:text-3xl font-medium tracking-tight text-center mx-auto"
             >
-              What do you wanna clip?
+              What do you wanna snip today😊?
             </motion.h1>
           ) : isMetadataLoading ? (
             <motion.div
@@ -320,7 +397,7 @@ export default function Editor() {
             <input
               type="text"
               id="url"
-              placeholder="Paste video url here..."
+              placeholder="Paste YouTube or Instagram URL here..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               required
@@ -461,7 +538,7 @@ export default function Editor() {
               exit={{ opacity: 0, y: -10 }}
               className="text-center mt-4 text-sm text-muted-foreground"
             >
-              🔥 {downloadCount} banger{downloadCount > 1 && "s"} clipped
+              🔥 {downloadCount} video{downloadCount > 1 && "s"} clipped
             </motion.div>
           )}
         </AnimatePresence>
@@ -474,11 +551,49 @@ export default function Editor() {
             product_id: process.env.NEXT_PUBLIC_DODO_PAYMENTS_PRODUCT_ID!,
             name: "Starter",
             description: "Servers don't come cheap 🤷🏻",
-            price: "4.20",
+            price: "2.20",
             currency: "$",
           }}
         />
       )}
+      
+      <Dialog open={showAdminWelcome} onOpenChange={setShowAdminWelcome}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Crown className="w-5 h-5 text-yellow-500" />
+              Welcome, Admin!
+            </DialogTitle>
+            <DialogDescription>
+              You now have admin privileges and can access the admin panel through the settings button in the top navigation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowAdminWelcome(false)}>
+              Got it!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSudoWelcome} onOpenChange={setShowSudoWelcome}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-blue-500" />
+              Welcome, Sudo User!
+            </DialogTitle>
+            <DialogDescription>
+              You now have sudo privileges and can use all premium features without a subscription. Enjoy unlimited access to the video clipper!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end">
+            <Button onClick={() => setShowSudoWelcome(false)}>
+              Awesome!
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

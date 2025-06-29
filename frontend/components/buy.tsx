@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "./ui/button";
-import { SubscriptionForm } from './subscription-form';
+import { PurchaseForm } from './subscription-form';
 
 type Product = {
   product_id: string;
@@ -49,14 +49,14 @@ export default function Buy({
     setShowBillingForm(true);
   };
 
-  const processSubscription = async (collectedData: CollectedBillingData) => {
+  const processPurchase = async (collectedData: CollectedBillingData) => {
     if (!product) {
       console.error("Product information is missing.");
       return;
     }
     setLoading(true);
     try {
-      const subscriptionData = {
+      const purchaseData = {
         billing: collectedData.billing,
         customer: {
           name: collectedData.customer.name,
@@ -66,12 +66,12 @@ export default function Buy({
         payment_link: true,
       };
 
-      const response = await fetch(`/api/subscriptions`, {
+      const response = await fetch(`/api/purchase`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(subscriptionData),
+        body: JSON.stringify(purchaseData),
       });
 
       const data = await response.json();
@@ -83,7 +83,7 @@ export default function Buy({
         router.push(checkoutUrl);
       }
     } catch (error) {
-      console.error("Subscription processing error:", error);
+      console.error("Purchase processing error:", error);
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ export default function Buy({
           {product.currency}
           {product.price}
           {" "}
-          per month
+          one-time payment
         </DialogTitle>
         {!showBillingForm && (
           <>
@@ -105,28 +105,32 @@ export default function Buy({
             </DialogDescription>
             <ul className="flex flex-col gap-2 mb-4">
               <li className="flex items-center gap-2">
-                <span>✨</span>
-                We don&apos;t have sketchy ads or popups
+                <span>🧠</span>
+                Advanced AI assistance for all interview types
               </li>
               <li className="flex items-center gap-2">
                 <span>🚀</span>
-                Download unlimited clips
+                Unlimited interview sessions with real-time help
               </li>
               <li className="flex items-center gap-2">
-                <span>🧼</span>
-                No watermarks, no BS
+                <span>🔒</span>
+                Complete privacy - all processing happens locally
+              </li>
+              <li className="flex items-center gap-2">
+                <span>💡</span>
+                Get coding solutions, behavioral answers, and system design help
               </li>
               <li className="flex items-center gap-2">
                 <span>❤️</span>
-                Support the developers (we got servers to pay for :)
+                Lifetime access with your one-time purchase
               </li>
             </ul>
           </>
         )}
         {showBillingForm ? (
           <>
-            <SubscriptionForm onSubmit={processSubscription} />
-            {loading && <p className="text-center mt-2">Processing your subscription...</p>}
+                          <PurchaseForm onSubmit={processPurchase} />
+            {loading && <p className="text-center mt-2">Processing your purchase...</p>}
             <div className="flex justify-between items-center mt-4">
               <Button
                 variant="outline"
@@ -162,7 +166,7 @@ export default function Buy({
             </Button>
           </div>
           <p className="text-xs text-gray-500 mt-4">
-          By subscribing, you agree to our{" "}
+          By purchasing, you agree to our{" "}
           <a href="/terms" className="underline">
             Terms & Conditions
           </a>{" "}
@@ -170,7 +174,7 @@ export default function Buy({
           <a href="/privacy" className="underline">
             Privacy Policy
           </a>
-          . Subscriptions auto-renew until canceled.
+          . One-time payment, lifetime access.
         </p>
         </>
         )}

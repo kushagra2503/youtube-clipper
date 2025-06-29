@@ -1,6 +1,6 @@
-# YouTube Clipper
+# YouTube and Instagram Reels Snipper
 
-A SaaS tool that allows users to extract specific clips from YouTube videos by providing a URL and start/end timestamps. Clips are processed efficiently and downloaded directly to your computer. Open source for folks who can't afford it and know how code works!
+A SaaS tool that allows users to extract specific clips from YouTube videos and Instagram reels by providing a URL and start/end timestamps. Clips are processed efficiently and downloaded directly to your computer. Open source for folks who can't afford it and know how code works!
 
 ---
 
@@ -97,6 +97,32 @@ bun run dev
 
 ---
 
+## Instagram Reels Browser Fallback
+
+For Instagram reels that cannot be processed through the standard yt-dlp method, we have implemented a browser-based fallback system:
+
+### How it works:
+1. When you paste an Instagram reel URL, the system first attempts standard processing
+2. If that fails, it automatically switches to browser fallback mode
+3. The system uses browser automation to extract the video content
+4. Once extracted, normal clipping functionality applies
+
+### Usage for Instagram Reels:
+1. Paste your Instagram reel URL (e.g., `https://www.instagram.com/reel/ABC123/`)
+2. If standard processing fails, you'll see a "Browser Fallback" indicator
+3. The process may take slightly longer but provides better compatibility
+4. Set your start/end timestamps as normal
+5. Download your clipped reel
+
+### Supported Instagram Formats:
+- Public Instagram reels
+- Short-form vertical videos
+- Standard Instagram video posts
+
+**Note:** Private or restricted Instagram content cannot be processed due to platform limitations.
+
+---
+
 ## Required System Packages
 
 - **yt-dlp**: Used for partial YouTube downloads.
@@ -145,6 +171,16 @@ youtube-clipper/
 
 ---
 
-**Enjoy clipping YouTube videos!**
+## TODO
+
+1. Improving Instagram reels snipping
+2. Adding AI functionalities
+3. User centric dashboard
+4. Sharable Link
+
+---
+
+**Enjoy clipping YouTube and Instagram videos!**
 
 If you have any issues, please open an issue or PR.
+You can also send a dm to me on X : [@Brainfdev](https://x.com/Brainfdev)

@@ -15,25 +15,25 @@ type BillingInfo = {
   country: string;
 };
 
-type SubscriptionFormData = {
+type PurchaseFormData = {
   billing: BillingInfo;
   customer: {
     name: string;
   };
 };
 
-type SubscriptionFormProps = {
-  onSubmit: (data: SubscriptionFormData) => void;
+type PurchaseFormProps = {
+  onSubmit: (data: PurchaseFormData) => void;
   onBack?: () => void; // Optional: if you want a back button managed by the parent
 };
 
-export function SubscriptionForm({ onSubmit }: SubscriptionFormProps) { // Removed onBack from props for now, parent handles it
+export function PurchaseForm({ onSubmit }: PurchaseFormProps) { // Removed onBack from props for now, parent handles it
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Error state can be for local validation if needed, or removed if parent handles all errors
   const [error, setError] = useState<string | null>(null); 
   // Success state is removed as parent will handle outcome
   
-  const [formData, setFormData] = useState<SubscriptionFormData>({
+  const [formData, setFormData] = useState<PurchaseFormData>({
     billing: {
       city: '',
       state: '',
@@ -89,7 +89,7 @@ export function SubscriptionForm({ onSubmit }: SubscriptionFormProps) { // Remov
     <Card className="w-full max-w-md mx-auto shadow-lg">
       <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
         <CardTitle className="text-xl sm:text-2xl">Billing Information</CardTitle>
-        <CardDescription className="text-xs sm:text-sm">Please enter your billing details.</CardDescription>
+        <CardDescription className="text-xs sm:text-sm">Please enter your billing details for your one-time purchase.</CardDescription>
       </CardHeader>
       <CardContent className="px-4 py-3 sm:px-6 sm:py-4">
         <form onSubmit={handleSubmit} className="space-y-3">

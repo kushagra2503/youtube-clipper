@@ -1,20 +1,37 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { spawn } from "child_process";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import Stripe from "stripe";
+import nodemailer from "nodemailer";
+import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import fs from "fs";
-import { promisify } from "util";
-
-const unlinkAsync = promisify(fs.unlink);
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+});
+
+// Email configuration
+const emailTransporter = nodemailer.createTransporter({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
 const allowedOrigin = process.env.NODE_ENV === "production" 
-  ? "https://clippa.in" 
+  ? "https://quackquery.app" 
   : "http://localhost:3000";
 
 const corsOptions: cors.CorsOptions = {
@@ -24,404 +41,573 @@ const corsOptions: cors.CorsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(express.static('public'));
 
-const uploadsDir = path.join(__dirname, "../uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
-}
-
-const jobsDir = path.join(__dirname, "../jobs");
-if (!fs.existsSync(jobsDir)) {
-  fs.mkdirSync(jobsDir);
-}
-
-interface Job {
+// In-memory storage (replace with database in production)
+interface User {
   id: string;
-  status: 'processing' | 'ready' | 'error';
-  filePath?: string;
-  error?: string;
+  email: string;
+  password: string;
+  name: string;
+  plan: 'free' | 'pro' | 'enterprise';
+  isAdmin: boolean;
+  isSudo: boolean;
+  createdAt: Date;
+  lastLogin?: Date;
+  stripeCustomerId?: string;
+  subscriptionId?: string;
+  downloadToken?: string;
 }
-const jobs = new Map<string, Job>();
 
-// Persistent job management
-function saveJob(job: Job) {
-  const jobFile = path.join(jobsDir, `${job.id}.json`);
-  fs.writeFileSync(jobFile, JSON.stringify(job, null, 2));
-  jobs.set(job.id, job);
+interface DownloadStats {
+  totalDownloads: number;
+  dailyDownloads: { [date: string]: number };
+  planDistribution: { free: number; pro: number; enterprise: number };
 }
 
-function loadJob(id: string): Job | null {
-  try {
-    const jobFile = path.join(jobsDir, `${id}.json`);
-    if (fs.existsSync(jobFile)) {
-      const jobData = JSON.parse(fs.readFileSync(jobFile, 'utf-8'));
-      jobs.set(id, jobData);
-      return jobData;
-    }
-  } catch (err) {
-    console.error(`Error loading job ${id}:`, err);
+interface AdminSettings {
+  maintenance: boolean;
+  downloadEnabled: boolean;
+  maxFreeDownloads: number;
+  announcements: string[];
+}
+
+const users: Map<string, User> = new Map();
+const downloadStats: DownloadStats = {
+  totalDownloads: 0,
+  dailyDownloads: {},
+  planDistribution: { free: 0, pro: 0, enterprise: 0 }
+};
+
+const adminSettings: AdminSettings = {
+  maintenance: false,
+  downloadEnabled: true,
+  maxFreeDownloads: 3,
+  announcements: []
+};
+
+// JWT middleware
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
   }
-  return null;
-}
 
-function deleteJob(id: string) {
-  const jobFile = path.join(jobsDir, `${id}.json`);
-  try {
-    if (fs.existsSync(jobFile)) {
-      fs.unlinkSync(jobFile);
-    }
-  } catch (err) {
-    console.error(`Error deleting job file ${id}:`, err);
-  }
-  jobs.delete(id);
-}
-
-function createJobId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-function timeToSeconds(timeStr: string): number {
-  const parts = timeStr.split(':');
-  return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
-}
-
-function secondsToTime(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toFixed(3).padStart(6, '0')}`;
-}
-
-async function adjustSubtitleTimestamps(inputPath: string, outputPath: string, startTime: string): Promise<void> {
-  const startSeconds = timeToSeconds(startTime);
-  const content = await fs.promises.readFile(inputPath, 'utf-8');
-  
-  // Regex to match VTT timestamp lines (e.g., "00:01:30.000 --> 00:01:35.000")
-  const timestampRegex = /(\d{2}:\d{2}:\d{2}\.\d{3}) --> (\d{2}:\d{2}:\d{2}\.\d{3})/g;
-  
-  const adjustedContent = content.replace(timestampRegex, (match, start, end) => {
-    const startSec = timeToSeconds(start) - startSeconds;
-    const endSec = timeToSeconds(end) - startSeconds;
-    
-    // Skip negative timestamps (before clip start)
-    if (startSec < 0) return match; // Keep original, will be filtered out by video duration
-    
-    return `${secondsToTime(startSec)} --> ${secondsToTime(endSec)}`;
+  jwt.verify(token, process.env.JWT_SECRET!, (err: any, user: any) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
   });
-  
-  await fs.promises.writeFile(outputPath, adjustedContent, 'utf-8');
-}
+};
 
-app.post("/api/clip", async (req, res) => {
-  const { url, startTime, endTime, subtitles, formatId } = req.body || {};
-  if (!url || !startTime || !endTime) {
-    return res.status(400).json({ error: "url, startTime, and endTime are required" });
+// Admin middleware
+const requireAdmin = (req: any, res: any, next: any) => {
+  const user = users.get(req.user.id);
+  if (!user || !user.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
+  next();
+};
 
-  const id = createJobId();
-  const outputPath = path.join(uploadsDir, `clip-${id}.mp4`);
-  const job: Job = { id, status: 'processing', filePath: outputPath };
-  saveJob(job);
-  console.log(`[job ${id}] created and saved to persistent storage. Total jobs:`, jobs.size);
+// Sudo middleware
+const requireSudo = (req: any, res: any, next: any) => {
+  const user = users.get(req.user.id);
+  if (!user || (!user.isSudo && !user.isAdmin)) {
+    return res.status(403).json({ error: 'Sudo access required' });
+  }
+  next();
+};
 
-  (async () => {
-    try {
-      const section = `*${startTime}-${endTime}`;
-      const cookiesFilePath = path.join(__dirname, "../src/cookies.txt");
+// Utility functions
+const generateToken = (user: User) => {
+  return jwt.sign(
+    { id: user.id, email: user.email, plan: user.plan },
+    process.env.JWT_SECRET!,
+    { expiresIn: '30d' }
+  );
+};
 
-      const ytArgs = [
-        url,
-      ];
-      if (formatId) {
-        ytArgs.push("-f", formatId);
-      } else {
-        ytArgs.push("-f", "bv[ext=mp4][vcodec^=avc1][height<=2160][fps<=60]+ba[ext=m4a][acodec^=mp4a]/best[ext=mp4][vcodec^=avc1]");
-      }
-      ytArgs.push(
-        "--download-sections",
-        section,
-        "-o",
-        outputPath,
-        "--merge-output-format",
-        "mp4",
-        "--no-check-certificates",
-        "--no-warnings",
-        "--add-header",
-        "referer:youtube.com",
-        "--add-header",
-        "user-agent:Mozilla/5.0",
-        "--verbose"
-      );
-      if (subtitles) {
-        ytArgs.push(
-          "--write-subs",
-          "--write-auto-subs",
-          "--sub-lang",
-          "en",
-          "--sub-format",
-          "vtt"
-        );
-      }
-      if (fs.existsSync(cookiesFilePath)) ytArgs.push("--cookies", cookiesFilePath);
+const sendEmail = async (to: string, subject: string, html: string) => {
+  try {
+    await emailTransporter.sendMail({
+      from: process.env.FROM_EMAIL,
+      to,
+      subject,
+      html,
+    });
+  } catch (error) {
+    console.error('Email sending failed:', error);
+  }
+};
 
-      console.log(`[job ${id}] starting yt-dlp`);
-      const yt = spawn(path.resolve(__dirname, '../bin/yt-dlp'), ytArgs);
-      yt.stderr.on('data', d => console.error(`[job ${id}]`, d.toString()));
+const updateDownloadStats = (plan: 'free' | 'pro' | 'enterprise') => {
+  downloadStats.totalDownloads++;
+  downloadStats.planDistribution[plan]++;
+  
+  const today = new Date().toISOString().split('T')[0];
+  downloadStats.dailyDownloads[today] = (downloadStats.dailyDownloads[today] || 0) + 1;
+};
 
-      await new Promise<void>((resolve, reject) => {
-        yt.on('close', (code, signal) => {
-          if (code === 0) {
-            resolve();
-          } else if (code === null) {
-            reject(new Error(`yt-dlp process was killed by signal: ${signal || 'unknown'}`));
-          } else {
-            reject(new Error(`yt-dlp exited with code ${code}`));
-          }
-        });
-        yt.on('error', reject);
-      });
+// Authentication Routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
 
-      const fastPath = path.join(uploadsDir, `clip-${id}-fast.mp4`);
-      const subPath = outputPath.replace(/\.mp4$/, ".en.vtt");
-      const subtitlesExist = fs.existsSync(subPath);
-
-      // Adjust subtitle timestamps if subtitles exist
-      if (subtitles && subtitlesExist) {
-        const adjustedSubPath = path.join(uploadsDir, `clip-${id}-adjusted.vtt`);
-        await adjustSubtitleTimestamps(subPath, adjustedSubPath, startTime);
-        // Replace the original subtitle file with the adjusted one
-        await fs.promises.rename(adjustedSubPath, subPath);
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const ffmpegArgs = [
-          '-y',
-          '-i', outputPath,
-        ];
-
-        if (subtitles && subtitlesExist) {
-          console.log(`[job ${id}] burning subtitles from ${subPath}`);
-          ffmpegArgs.push(
-            '-vf', `subtitles=${subPath}`,
-            '-c:v', 'libx264',
-            '-c:a', 'aac',
-            '-b:a', '128k'
-          );
-        } else {
-          ffmpegArgs.push(
-            '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-b:a', '128k'
-          );
-        }
-
-        ffmpegArgs.push(
-          '-movflags', '+faststart',
-          fastPath
-        );
-
-        console.log(`[job ${id}] running ffmpeg`, ffmpegArgs.join(' '));
-        const ff = spawn('ffmpeg', ffmpegArgs);
-        ff.stderr.on('data', d => console.error(`[job ${id}] ffmpeg`, d.toString()));
-        ff.on('close', (code, signal) => {
-          if (code === 0) {
-            resolve();
-          } else if (code === null) {
-            reject(new Error(`ffmpeg process was killed by signal: ${signal || 'unknown'}`));
-          } else {
-            reject(new Error(`ffmpeg exited with code ${code}`));
-          }
-        });
-        ff.on('error', reject);
-      });
-
-      await fs.promises.unlink(outputPath).catch(()=>{});
-      await fs.promises.rename(fastPath, outputPath);
-      
-      if (subtitlesExist) {
-        await fs.promises.unlink(subPath).catch(() => {});
-      }
-
-      job.status = 'ready';
-      saveJob(job);
-      console.log(`[job ${id}] ready`);
-    } catch (err: unknown) {
-      console.error(`[job ${id}] failed`, err);
-      job.status = 'error';
-      const message = err instanceof Error ? err.message : String(err);
-      job.error = message;
-      saveJob(job);
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
-  })();
 
-  return res.status(202).json({ id });
+    // Check if user exists
+    const existingUser = Array.from(users.values()).find(u => u.email === email);
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const userId = uuidv4();
+
+    const user: User = {
+      id: userId,
+      email,
+      password: hashedPassword,
+      name,
+      plan: 'free',
+      isAdmin: false,
+      isSudo: false,
+      createdAt: new Date(),
+    };
+
+    users.set(userId, user);
+
+    const token = generateToken(user);
+
+    // Send welcome email
+    await sendEmail(
+      email,
+      'Welcome to QuackQuery!',
+      `
+      <h1>Welcome to QuackQuery, ${name}!</h1>
+      <p>Thank you for joining QuackQuery, the AI-powered interview assistant.</p>
+      <p>You can now download the app and start using it for your interviews.</p>
+      <a href="${allowedOrigin}/download" style="background: linear-gradient(to right, #9333ea, #ec4899); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Download QuackQuery</a>
+      `
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan,
+        isAdmin: user.isAdmin,
+        isSudo: user.isSudo
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
 });
 
-app.get('/api/clip/:id', async (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const user = Array.from(users.values()).find(u => u.email === email);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    user.lastLogin = new Date();
+    const token = generateToken(user);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan,
+        isAdmin: user.isAdmin,
+        isSudo: user.isSudo
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.get('/api/auth/me', authenticateToken, (req: any, res) => {
+  const user = users.get(req.user.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  res.json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    plan: user.plan,
+    isAdmin: user.isAdmin,
+    isSudo: user.isSudo,
+    lastLogin: user.lastLogin
+  });
+});
+
+// Payment Routes
+app.post('/api/payments/create-checkout', authenticateToken, async (req: any, res) => {
+  try {
+    const { planType } = req.body; // 'pro' or 'enterprise'
+    const user = users.get(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const prices = {
+      pro: process.env.STRIPE_PRO_PRICE_ID,
+      enterprise: process.env.STRIPE_ENTERPRISE_PRICE_ID
+    };
+
+    const priceId = prices[planType as keyof typeof prices];
+    if (!priceId) {
+      return res.status(400).json({ error: 'Invalid plan type' });
+    }
+
+    let customerId = user.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.name,
+        metadata: { userId: user.id }
+      });
+      customerId = customer.id;
+      user.stripeCustomerId = customerId;
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [{
+        price: priceId,
+        quantity: 1,
+      }],
+      mode: 'subscription',
+      success_url: `${allowedOrigin}/download?success=true&plan=${planType}`,
+      cancel_url: `${allowedOrigin}/pricing?canceled=true`,
+      metadata: {
+        userId: user.id,
+        planType
+      }
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Checkout creation error:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    const sig = req.headers['stripe-signature'];
+    const event = stripe.webhooks.constructEvent(req.body, sig!, process.env.STRIPE_WEBHOOK_SECRET!);
+
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as any;
+      const userId = session.metadata.userId;
+      const planType = session.metadata.planType;
+
+      const user = users.get(userId);
+      if (user) {
+        user.plan = planType;
+        user.subscriptionId = session.subscription;
+        user.downloadToken = uuidv4(); // Generate download token
+
+        // Send success email with download link
+        await sendEmail(
+          user.email,
+          'QuackQuery Pro Activated!',
+          `
+          <h1>Welcome to QuackQuery ${planType.charAt(0).toUpperCase() + planType.slice(1)}!</h1>
+          <p>Your subscription is now active. You can download the premium version of QuackQuery.</p>
+          <a href="${allowedOrigin}/download?token=${user.downloadToken}" style="background: linear-gradient(to right, #9333ea, #ec4899); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px;">Download QuackQuery Pro</a>
+          <p>Your premium features include:</p>
+          <ul>
+            <li>Unlimited interview sessions</li>
+            <li>Advanced AI responses</li>
+            <li>Real-time assistance</li>
+            <li>Priority support</li>
+          </ul>
+          `
+        );
+      }
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(400).json({ error: 'Webhook failed' });
+  }
+});
+
+// Download Routes
+app.get('/api/download/check', authenticateToken, (req: any, res) => {
+  const user = users.get(req.user.id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (!adminSettings.downloadEnabled && !user.isAdmin) {
+    return res.status(503).json({ error: 'Downloads are currently disabled' });
+  }
+
+  const canDownload = user.plan !== 'free' || user.isAdmin || user.isSudo;
+  
+  res.json({
+    canDownload,
+    plan: user.plan,
+    downloadToken: user.downloadToken,
+    requiresPayment: !canDownload
+  });
+});
+
+app.get('/api/download/:platform', authenticateToken, (req: any, res) => {
+  const { platform } = req.params; // 'windows', 'mac', 'linux'
+  const user = users.get(req.user.id);
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  if (user.plan === 'free' && !user.isAdmin && !user.isSudo) {
+    return res.status(403).json({ error: 'Premium subscription required' });
+  }
+
+  if (!adminSettings.downloadEnabled && !user.isAdmin) {
+    return res.status(503).json({ error: 'Downloads are currently disabled' });
+  }
+
+  // Update download stats
+  updateDownloadStats(user.plan);
+
+  // In production, these would be actual download URLs or file paths
+  const downloadUrls = {
+    windows: 'https://releases.quackquery.app/QuackQuery-Setup-1.0.0.exe',
+    mac: 'https://releases.quackquery.app/QuackQuery-1.0.0.dmg',
+    linux: 'https://releases.quackquery.app/QuackQuery-1.0.0.AppImage'
+  };
+
+  const downloadUrl = downloadUrls[platform as keyof typeof downloadUrls];
+  if (!downloadUrl) {
+    return res.status(400).json({ error: 'Invalid platform' });
+  }
+
+  // Log download
+  console.log(`Download: ${user.email} (${user.plan}) downloaded ${platform} version`);
+
+  res.json({ 
+    downloadUrl,
+    platform,
+    version: '1.0.0',
+    plan: user.plan
+  });
+});
+
+// Admin Routes
+app.get('/api/admin/stats', authenticateToken, requireAdmin, (req: any, res) => {
+  const totalUsers = users.size;
+  const planCounts = Array.from(users.values()).reduce((acc, user) => {
+    acc[user.plan] = (acc[user.plan] || 0) + 1;
+    return acc;
+  }, {} as any);
+
+  const recentUsers = Array.from(users.values())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 10);
+
+  res.json({
+    totalUsers,
+    planCounts,
+    downloadStats,
+    recentUsers: recentUsers.map(u => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      plan: u.plan,
+      createdAt: u.createdAt,
+      lastLogin: u.lastLogin
+    }))
+  });
+});
+
+app.get('/api/admin/users', authenticateToken, requireAdmin, (req: any, res) => {
+  const userList = Array.from(users.values()).map(u => ({
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    plan: u.plan,
+    isAdmin: u.isAdmin,
+    isSudo: u.isSudo,
+    createdAt: u.createdAt,
+    lastLogin: u.lastLogin
+  }));
+
+  res.json({ users: userList });
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req: any, res) => {
   const { id } = req.params;
-  const { download } = req.query;
-  let job = jobs.get(id);
-  
-  // If not in memory, try to load from persistent storage
-  if (!job) {
-    job = loadJob(id) || undefined;
-  }
-  
-  if (!job) {
-    console.log(`[job ${id}] not found in memory or persistent storage. Current jobs:`, Array.from(jobs.keys()));
-    return res.status(404).json({ error: 'job not found'});
+  const { plan, isAdmin, isSudo } = req.body;
+
+  const user = users.get(id);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
   }
 
-  if (download === '1') {
-    if (job.status !== 'ready' || !job.filePath) return res.status(409).json({ status: job.status });
-    return res.download(job.filePath, 'clip.mp4', async err => {
-      if (err) console.error(`[job ${id}] send error`, err);
-      try { if (job.filePath) await unlinkAsync(job.filePath); } catch {}
-      deleteJob(id);
-      console.log(`[job ${id}] completed and removed from persistent storage. Total jobs:`, jobs.size);
-    });
-  }
+  if (plan) user.plan = plan;
+  if (typeof isAdmin === 'boolean') user.isAdmin = isAdmin;
+  if (typeof isSudo === 'boolean') user.isSudo = isSudo;
 
-  return res.json({ status: job.status, error: job.error });
+  res.json({ message: 'User updated successfully' });
 });
 
-app.get("/api/formats", async (req, res) => {
-  const { url } = req.query;
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: "url is required" });
-  }
+app.get('/api/admin/settings', authenticateToken, requireAdmin, (req: any, res) => {
+  res.json(adminSettings);
+});
+
+app.put('/api/admin/settings', authenticateToken, requireAdmin, (req: any, res) => {
+  const { maintenance, downloadEnabled, maxFreeDownloads, announcements } = req.body;
+
+  if (typeof maintenance === 'boolean') adminSettings.maintenance = maintenance;
+  if (typeof downloadEnabled === 'boolean') adminSettings.downloadEnabled = downloadEnabled;
+  if (typeof maxFreeDownloads === 'number') adminSettings.maxFreeDownloads = maxFreeDownloads;
+  if (Array.isArray(announcements)) adminSettings.announcements = announcements;
+
+  res.json({ message: 'Settings updated successfully' });
+});
+
+// Sudo Routes
+app.get('/api/sudo/logs', authenticateToken, requireSudo, (req: any, res) => {
+  // In production, this would read from actual log files
+  const mockLogs = [
+    { timestamp: new Date(), level: 'INFO', message: 'User login successful', userId: req.user.id },
+    { timestamp: new Date(), level: 'INFO', message: 'Download initiated', platform: 'windows' },
+    { timestamp: new Date(), level: 'ERROR', message: 'Payment processing failed', error: 'Card declined' }
+  ];
+
+  res.json({ logs: mockLogs });
+});
+
+app.post('/api/sudo/broadcast', authenticateToken, requireSudo, async (req: any, res) => {
+  const { subject, message, targetPlan } = req.body;
 
   try {
-    const ytDlpPath = path.resolve(__dirname, '../bin/yt-dlp');
-    const cookiesFilePath = path.join(__dirname, "../src/cookies.txt");
-    
-    const ytArgs = [
-      '-j', 
-      '--no-warnings',
-      '--no-check-certificates',
-      '--add-header',
-      'referer:youtube.com',
-      '--add-header',
-      'user-agent:Mozilla/5.0',
-      url as string
-    ];
-    
-    if (fs.existsSync(cookiesFilePath)) {
-      ytArgs.splice(-1, 0, '--cookies', cookiesFilePath);
+    const targetUsers = Array.from(users.values()).filter(user => 
+      !targetPlan || user.plan === targetPlan
+    );
+
+    for (const user of targetUsers) {
+      await sendEmail(user.email, subject, message);
     }
-    
-    console.log(`[formats] fetching formats for URL: ${url}`);
-    const yt = spawn(ytDlpPath, ytArgs);
-    
-    // Add timeout for yt-dlp process
-    const timeout = setTimeout(() => {
-      console.log(`[formats] timeout reached, killing yt-dlp process`);
-      yt.kill('SIGKILL');
-    }, 30000); // 30 second timeout
-    
-    let jsonData = '';
-    yt.stdout.on('data', (data) => {
-      jsonData += data.toString();
-    });
 
-    let errorData = '';
-    yt.stderr.on('data', (data) => {
-        errorData += data.toString();
+    res.json({ 
+      message: 'Broadcast sent successfully', 
+      recipientCount: targetUsers.length 
     });
-
-    yt.on('close', (code, signal) => {
-      clearTimeout(timeout);
-      if (signal === 'SIGKILL') {
-        console.error(`[formats] yt-dlp process timed out after 30 seconds`);
-        return res.status(500).json({ error: 'Request timed out - video may be too long or unavailable' });
-      }
-      if (code !== 0) {
-        console.error(`[formats] yt-dlp exited with code ${code}`, errorData);
-        return res.status(500).json({ error: `yt-dlp exited with code ${code}` });
-      }
-      
-      try {
-        const info = JSON.parse(jsonData);
-        
-        // Get video-only formats (higher quality) and combined formats
-        const videoFormats = info.formats
-          .filter((f: any) => f.vcodec !== 'none' && f.height && (f.ext === 'mp4' || f.ext === 'webm'))
-          .map((f: any) => ({
-            format_id: f.format_id,
-            label: `${f.height}p${f.fps > 30 ? f.fps : ''}`,
-            height: f.height,
-            hasAudio: f.acodec !== 'none',
-            ext: f.ext
-          }))
-          .sort((a: any, b: any) => b.height - a.height);
-        
-        // Remove duplicates based on height and keep the best format for each resolution
-        const uniqueFormats = videoFormats.reduce((acc: any[], current: any) => {
-          const existing = acc.find((item) => item.label === current.label);
-          if (!existing) {
-            acc.push(current);
-          } else if (current.hasAudio && !existing.hasAudio) {
-            // Prefer formats with audio if available
-            const index = acc.findIndex((item) => item.label === current.label);
-            acc[index] = current;
-          }
-          return acc;
-        }, []);
-        
-        // If we need to use video-only formats, we'll use format selection that combines with best audio
-        const formatsForUser = uniqueFormats.map((f: any) => ({
-          format_id: f.hasAudio ? f.format_id : `${f.format_id}+bestaudio`,
-          label: f.label
-        }));
-        
-        return res.json({ formats: formatsForUser });
-      } catch (e) {
-          console.error('[formats] JSON parse error', e);
-          return res.status(500).json({ error: 'Failed to parse yt-dlp output'});
-      }
-    });
-
-    yt.on('error', (err) => {
-        clearTimeout(timeout);
-        console.error('[formats] yt-dlp spawn error', err);
-        return res.status(500).json({ error: 'Failed to start yt-dlp process' });
-    });
-
-  } catch (err: unknown) {
-    console.error(`[formats] failed`, err);
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ error: message });
+  } catch (error) {
+    console.error('Broadcast error:', error);
+    res.status(500).json({ error: 'Broadcast failed' });
   }
 });
 
-app.get("/", (req, res) => res.send("Server is alive!"));
+// Public Routes
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    maintenance: adminSettings.maintenance,
+    downloadEnabled: adminSettings.downloadEnabled,
+    announcements: adminSettings.announcements
+  });
+});
 
-// Clean up old job files on startup
-function cleanupOldJobs() {
-  try {
-    const jobFiles = fs.readdirSync(jobsDir);
-    const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours ago
-    
-    jobFiles.forEach(file => {
-      try {
-        const filePath = path.join(jobsDir, file);
-        const stats = fs.statSync(filePath);
-        if (stats.mtime.getTime() < cutoffTime) {
-          fs.unlinkSync(filePath);
-          console.log(`Cleaned up old job file: ${file}`);
-        }
-      } catch (err) {
-        console.error(`Error cleaning up job file ${file}:`, err);
+app.get('/api/plans', (req, res) => {
+  res.json({
+    plans: [
+      {
+        id: 'free',
+        name: 'Free',
+        price: 0,
+        features: ['5 interview sessions/month', 'Basic AI responses', 'Community support']
+      },
+      {
+        id: 'pro',
+        name: 'Pro',
+        price: 29,
+        features: ['Unlimited sessions', 'Advanced AI', 'Real-time assistance', 'Priority support']
+      },
+      {
+        id: 'enterprise',
+        name: 'Enterprise',
+        price: 99,
+        features: ['Everything in Pro', 'Team dashboard', 'Custom integrations', 'Dedicated support']
       }
-    });
-  } catch (err) {
-    console.error('Error during job cleanup:', err);
-  }
-}
+    ]
+  });
+});
+
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "QuackQuery Backend API",
+    version: "1.0.0",
+    status: "active"
+  });
+});
+
+// Error handling middleware
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
 
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+  console.log(`QuackQuery Backend running on port ${port}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
   console.log(`CORS origin: ${allowedOrigin}`);
-  cleanupOldJobs();
-});
+  
+  // Create default admin user if none exists
+  const adminExists = Array.from(users.values()).some(u => u.isAdmin);
+  if (!adminExists) {
+    const adminId = uuidv4();
+    const defaultAdmin: User = {
+      id: adminId,
+      email: 'radhikayash2@gmail.com',
+      password: bcrypt.hashSync('admin123', 10),
+      name: 'Admin User',
+      plan: 'enterprise',
+      isAdmin: true,
+      isSudo: true,
+      createdAt: new Date(),
+    };
+    users.set(adminId, defaultAdmin);
+          console.log('Default admin user created: radhikayash2@gmail.com / admin123');
+  }
+}); 
