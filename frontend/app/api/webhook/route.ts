@@ -28,42 +28,110 @@ export async function POST(request: Request) {
         const paymentData = await dodopayments.payments.retrieve(payload.data.payment_id);
         
         console.log("-------PAYMENT SUCCESS START ---------");
-        console.log(paymentData);
+        console.log('Full payment data:', JSON.stringify(paymentData, null, 2));
+        console.log('Metadata:', paymentData.metadata);
+        console.log('User ID from metadata:', paymentData.metadata?.user_id);
         console.log("-------PAYMENT SUCCESS END ---------");
 
         const userId = paymentData.metadata.user_id;
+        const customerEmail = paymentData.customer?.email;
+
+        console.log('Looking for user with ID:', userId);
+        console.log('Customer email:', customerEmail);
+
+        // First try to find by userId, then by email as fallback
+        let targetUserId = userId;
+        
+        if (!userId && customerEmail) {
+          // If no userId in metadata, find user by email
+          const userByEmail = await db
+            .select()
+            .from(user)
+            .where(eq(user.email, customerEmail))
+            .limit(1);
+          
+          if (userByEmail.length > 0) {
+            targetUserId = userByEmail[0].id;
+            console.log('Found user by email, using userId:', targetUserId);
+          }
+        } else if (userId && customerEmail) {
+          // Even if we have userId, double-check it matches the email
+          const userByEmail = await db
+            .select()
+            .from(user)
+            .where(eq(user.email, customerEmail))
+            .limit(1);
+          
+          if (userByEmail.length > 0 && userByEmail[0].id !== userId) {
+            console.warn(`User ID mismatch! Metadata: ${userId}, Email lookup: ${userByEmail[0].id}`);
+            targetUserId = userByEmail[0].id;
+            console.log('Using email-based userId for consistency:', targetUserId);
+          }
+        }
+
+        if (!targetUserId) {
+          console.error('No valid user ID found for payment');
+          console.error('Payment data:', { userId, customerEmail, paymentId: payload.data.payment_id });
+          
+          // Create a pending payment record that will be auto-linked when user signs up
+          if (customerEmail) {
+            const pendingPaymentId = payload.data.payment_id || uuidv4();
+            
+            await db.insert(payment).values({
+              id: pendingPaymentId,
+              userId: `pending_${customerEmail}`, // Temporary user ID with email
+              status: "pending_signup",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            
+            console.log(`✅ PENDING PAYMENT: Created pending payment for ${customerEmail}`);
+            console.log(`Payment will be auto-activated when user signs up with this email`);
+          }
+          break;
+        }
+
+        console.log('Processing payment for user:', targetUserId);
 
         // Update or create payment record
         const existingPayment = await db
           .select()
           .from(payment)
-          .where(eq(payment.userId, userId))
+          .where(eq(payment.userId, targetUserId))
           .limit(1);
 
         if (existingPayment.length > 0) {
+          console.log('Updating existing payment record');
           await db
             .update(payment)
-            .set({ status: "active", updatedAt: new Date() })
-            .where(eq(payment.userId, userId));
+            .set({ 
+              status: "active", 
+              updatedAt: new Date(),
+              id: payload.data.payment_id || existingPayment[0].id // Update with actual payment ID
+            })
+            .where(eq(payment.userId, targetUserId));
+          console.log('Payment record updated successfully');
         } else {
+          console.log('Creating new payment record');
           await db.insert(payment).values({
             id: payload.data.payment_id || uuidv4(),
-            userId: userId,
+            userId: targetUserId,
             status: "active",
             createdAt: new Date(),
             updatedAt: new Date(),
           });
+          console.log('Payment record created successfully');
         }
 
         // Log successful purchase for analytics
         const userData = await db
           .select()
           .from(user)
-          .where(eq(user.id, userId))
+          .where(eq(user.id, targetUserId))
           .limit(1);
 
         if (userData.length > 0) {
-          console.log(`✅ PURCHASE SUCCESS: ${userData[0].email} purchased QuackQuery Pro for $5.20`);
+          console.log(`✅ PURCHASE SUCCESS: ${userData[0].email} purchased QuackQuery Pro for $4.20`);
         }
 
         break;

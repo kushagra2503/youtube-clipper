@@ -27,7 +27,7 @@ const fadeUpVariants = {
 const pricingPlans = [
   {
     name: "Download QuackQuery",
-    price: "5.20",
+    price: "4.20",
     currency: "$",
     description: "",
     features: [
@@ -42,7 +42,7 @@ const pricingPlans = [
     ],
     buttonText: "Start Quacking!",
     popular: true,
-    product_id: "pro_monthly"
+    product_id: "pdt_4oP8pxxo66BVMQoPG4JrP"
   },
   {
     name: "For Enterprise",
@@ -89,18 +89,31 @@ export default function PricingPage() {
   }, [session]);
 
   const handleDirectDownload = async () => {
-    if (!userInfo?.isSudo) return;
+    console.log('handleDirectDownload called', { userInfo });
+    
+    // Check if user can download (sudo, admin, or has lifetime access)
+    if (!userInfo?.isSudo && !userInfo?.isAdmin && !userInfo?.lifetimeAccess) {
+      console.log('User cannot download - no permissions');
+      return;
+    }
     
     // Default to Windows, but you can add platform detection or selection
     try {
-      const response = await fetch('/api/download/github?platform=windows');
-      const data = await response.json();
+      console.log('Initiating direct download for user:', {
+        isSudo: userInfo?.isSudo,
+        isAdmin: userInfo?.isAdmin, 
+        lifetimeAccess: userInfo?.lifetimeAccess
+      });
       
-      if (data.downloadUrl) {
-        window.open(data.downloadUrl, '_blank');
+      // Use appropriate endpoint based on user type
+      if (userInfo?.isSudo || userInfo?.isAdmin) {
+        window.location.href = '/api/download/github';
+      } else {
+        // Paid users use regular download endpoint
+        window.location.href = '/api/download';
       }
     } catch (error) {
-      console.error('Failed to get download URL:', error);
+      console.error('Failed to initiate download:', error);
     }
   };
 
@@ -111,8 +124,8 @@ export default function PricingPage() {
       return;
     }
 
-    // If user is sudo/admin and selecting the main plan, give direct download
-    if (userInfo?.isSudo && plan.product_id === "pro_monthly") {
+    // If user can download (sudo, admin, or has lifetime access) and selecting the main plan
+    if ((userInfo?.isSudo || userInfo?.isAdmin || userInfo?.lifetimeAccess) && plan.product_id === "pdt_4oP8pxxo66BVMQoPG4JrP") {
       handleDirectDownload();
       return;
     }
@@ -161,7 +174,7 @@ export default function PricingPage() {
                 <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
                   <div className="bg-gradient-to-r from-purple-400 to-pink-400 text-white px-4 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                     <Star className="w-3 h-3" />
-                    Most Popular
+                    Contribute to developer
                   </div>
                 </div>
               )}
@@ -197,8 +210,10 @@ export default function PricingPage() {
                   } text-white`}
                   onClick={() => handlePlanSelect(plan)}
                 >
-                  {userInfo?.isSudo && plan.product_id === "pro_monthly" 
-                    ? "Download Now (Free for Sudo)" 
+                  {(userInfo?.isSudo || userInfo?.isAdmin || userInfo?.lifetimeAccess) && plan.product_id === "pdt_4oP8pxxo66BVMQoPG4JrP" 
+                    ? userInfo?.isSudo || userInfo?.isAdmin
+                      ? "Download Now (Free)"
+                      : "Download Now (Purchased)"
                     : plan.buttonText}
                 </Button>
               ) : (

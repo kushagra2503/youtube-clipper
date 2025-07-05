@@ -1,4 +1,4 @@
-export default function Terms() {
+export default function Terms() { // Terms and Condition for QuackQuery
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
       <h1 className="text-3xl font-bold mb-8 text-white">Terms & Conditions</h1>
@@ -7,7 +7,7 @@ export default function Terms() {
         <div>
           <h2 className="text-xl font-semibold mb-3 text-white">1. Subscription Terms</h2>
           <p className="text-white/80">
-            Your subscription for Snipzy will continue until terminated by your side. 
+            Your contribution for QuackQuery will be used to maintain the service and for future updateSettings. 
           </p>
         </div>
 
@@ -15,14 +15,14 @@ export default function Terms() {
           <h2 className="text-xl font-semibold mb-3 text-white">2. Payment Terms</h2>
           <p className="text-white/80">
             Payments and transactions are processed safely and securely through our payment provider.
-            Subscriptions auto-renew every month unless canceled by your side.
+            This is a one-time payment and there are no recurring charges.
           </p>
         </div>
 
         <div>
           <h2 className="text-xl font-semibold mb-3 text-white">3. Usage Rights</h2>
           <p className="text-white/80">
-            This service is for personal use only. 
+            This service is for personal use only.
           </p>
         </div>
 

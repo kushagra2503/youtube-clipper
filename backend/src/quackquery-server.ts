@@ -23,7 +23,7 @@ const dodoConfig = {
 };
 
 // Email configuration (only if SMTP settings are provided)
-const emailTransporter = process.env.SMTP_HOST ? nodemailer.createTransporter({
+const emailTransporter = process.env.SMTP_HOST ? nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: false,
@@ -38,7 +38,20 @@ const allowedOrigin = process.env.NODE_ENV === "production"
   : process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 const corsOptions: cors.CorsOptions = {
-  origin: allowedOrigin,
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      allowedOrigin,
+      'file://', // Allow Electron app requests
+      'app://', // Allow Electron app requests
+    ];
+    
+    // Allow requests with no origin (like from Electron)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 };
 
@@ -57,6 +70,7 @@ interface User {
   isSudo: boolean;
   createdAt: Date;
   lastLogin?: Date;
+  lastLogout?: Date;
   dodoCustomerId?: string;
   paymentId?: string;
   downloadToken?: string;
@@ -156,7 +170,7 @@ const sendEmail = async (to: string, subject: string, html: string) => {
 // DodoPayments helper functions
 const createDodoCheckout = async (planType: string, user: any) => {
   const prices = {
-    pro: { amount: 520, currency: 'USD' }, // $5.20 one-time
+    pro: { amount: 420, currency: 'USD' }, // $4.20 one-time
     enterprise: { amount: 0, currency: 'USD' } // Contact for pricing
   };
 
@@ -248,11 +262,49 @@ const handleDodoWebhook = async (payload: any) => {
 };
 
 const updateDownloadStats = (plan: 'free' | 'pro' | 'enterprise') => {
-  downloadStats.totalDownloads++;
-  downloadStats.planDistribution[plan]++;
-  
   const today = new Date().toISOString().split('T')[0];
+  
+  downloadStats.totalDownloads++;
   downloadStats.dailyDownloads[today] = (downloadStats.dailyDownloads[today] || 0) + 1;
+  
+  if (plan === 'free') downloadStats.planDistribution.free++;
+  else if (plan === 'pro') downloadStats.planDistribution.pro++;
+  else if (plan === 'enterprise') downloadStats.planDistribution.enterprise++;
+};
+
+// Function to check if user has premium access (sudo or paid)
+const checkUserPremiumStatus = async (email: string): Promise<{ isPremium: boolean; isSudo: boolean; isAdmin: boolean }> => {
+  try {
+    // Call the frontend's internal API to check user status
+    const response = await fetch(`${allowedOrigin}/api/internal/user-status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API call failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    return {
+      isPremium: result.isPremium || false,
+      isSudo: result.isSudoUser || false,
+      isAdmin: result.isAdmin || false
+    };
+  } catch (error) {
+    console.error('Error checking user premium status:', error);
+    // Fallback: only admin gets access if API fails
+    const isAdmin = email === 'radhikayash2@gmail.com';
+    return {
+      isPremium: isAdmin,
+      isSudo: false,
+      isAdmin
+    };
+  }
 };
 
 // Authentication Routes
@@ -370,6 +422,154 @@ app.get('/api/auth/me', authenticateToken, (req: any, res) => {
     isAdmin: user.isAdmin,
     isSudo: user.isSudo,
     lastLogin: user.lastLogin
+  });
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', authenticateToken, (req: any, res) => {
+  try {
+    const user = users.get(req.user.id);
+    if (user) {
+      user.lastLogout = new Date();
+      console.log(`User ${user.email} logged out at ${user.lastLogout}`);
+    }
+
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+// Authentication status check for Electron app (no token required)
+app.get('/api/auth/check-status', async (req, res) => {
+  try {
+    // Check if there's an authenticated session via cookies or session storage
+    // For a more accurate check, we need to consider both login and logout times
+    const authenticatedUsers = Array.from(users.values()).filter(user => {
+      if (!user.lastLogin) return false;
+      
+      // Check if user has logged in recently (within last 24 hours)
+      const timeDiff = Date.now() - user.lastLogin.getTime();
+      const loginRecent = timeDiff < 24 * 60 * 60 * 1000;
+      
+      if (!loginRecent) return false;
+      
+      // If user has logged out, check if logout happened after login
+      if (user.lastLogout) {
+        const loggedOutAfterLogin = user.lastLogout.getTime() > user.lastLogin.getTime();
+        if (loggedOutAfterLogin) {
+          console.log(`User ${user.email} logged out after login - not authenticated`);
+          return false;
+        }
+      }
+      
+      console.log(`User ${user.email} is currently authenticated`);
+      return true;
+    });
+
+    // If multiple authenticated users, prioritize users with access rights
+    let selectedUser = null;
+    
+    if (authenticatedUsers.length > 0) {
+      // First, try to find admin users
+      const adminUsers = authenticatedUsers.filter(user => user.isAdmin);
+      if (adminUsers.length > 0) {
+        selectedUser = adminUsers.sort((a, b) => 
+          (b.lastLogin?.getTime() || 0) - (a.lastLogin?.getTime() || 0)
+        )[0];
+      }
+      
+      // If no admin, try to find sudo users
+      if (!selectedUser) {
+        const sudoUsers = authenticatedUsers.filter(user => user.isSudo);
+        if (sudoUsers.length > 0) {
+          selectedUser = sudoUsers.sort((a, b) => 
+            (b.lastLogin?.getTime() || 0) - (a.lastLogin?.getTime() || 0)
+          )[0];
+        }
+      }
+      
+      // If no admin/sudo, try to find paid users
+      if (!selectedUser) {
+        const paidUsers = authenticatedUsers.filter(user => user.lifetimeAccess);
+        if (paidUsers.length > 0) {
+          selectedUser = paidUsers.sort((a, b) => 
+            (b.lastLogin?.getTime() || 0) - (a.lastLogin?.getTime() || 0)
+          )[0];
+        }
+      }
+      
+      // Finally, fall back to most recent user
+      if (!selectedUser) {
+        selectedUser = authenticatedUsers.sort((a, b) => 
+          (b.lastLogin?.getTime() || 0) - (a.lastLogin?.getTime() || 0)
+        )[0];
+      }
+    }
+
+        if (selectedUser) {
+        // Check real payment status from database
+        const realStatus = await checkUserPremiumStatus(selectedUser.email);
+        
+        // Update user with real database status
+        if (realStatus.isPremium && !selectedUser.lifetimeAccess) {
+          selectedUser.lifetimeAccess = true;
+          selectedUser.plan = 'pro';
+          console.log(`Updated ${selectedUser.email} to paid status from database`);
+        }
+        
+        if (realStatus.isSudo && !selectedUser.isSudo) {
+          selectedUser.isSudo = true;
+          console.log(`Updated ${selectedUser.email} to sudo status from database`);
+        }
+        
+        if (realStatus.isAdmin && !selectedUser.isAdmin) {
+          selectedUser.isAdmin = true;
+          console.log(`Updated ${selectedUser.email} to admin status from database`);
+        }
+
+        res.json({
+          authenticated: true,
+          user: {
+            id: selectedUser.id,
+            email: selectedUser.email,
+            name: selectedUser.name,
+            plan: selectedUser.plan,
+            isAdmin: selectedUser.isAdmin,
+            isSudo: selectedUser.isSudo,
+            lifetimeAccess: selectedUser.lifetimeAccess
+          }
+        });
+    } else {
+      res.json({
+        authenticated: false,
+        user: null
+      });
+    }
+  } catch (error) {
+    console.error('Auth status check error:', error);
+    res.status(500).json({ error: 'Auth status check failed' });
+  }
+});
+
+// Debug endpoint to see all users (remove in production)
+app.get('/api/debug/users', (req, res) => {
+  const userList = Array.from(users.values()).map(user => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    plan: user.plan,
+    isAdmin: user.isAdmin,
+    isSudo: user.isSudo,
+    lifetimeAccess: user.lifetimeAccess,
+    lastLogin: user.lastLogin,
+    createdAt: user.createdAt
+  }));
+  
+  res.json({
+    totalUsers: userList.length,
+    users: userList
   });
 });
 
@@ -532,7 +732,7 @@ app.get('/api/download/:platform', authenticateToken, (req: any, res) => {
 });
 
 // Direct GitHub release download for sudo users
-app.get('/api/download/github/:platform', authenticateToken, (req: any, res) => {
+app.get('/api/download/github/:platform', authenticateToken, async (req: any, res) => {
   const { platform } = req.params;
   const user = users.get(req.user.id);
 
@@ -544,32 +744,83 @@ app.get('/api/download/github/:platform', authenticateToken, (req: any, res) => 
     return res.status(403).json({ error: 'Sudo access required for direct GitHub downloads' });
   }
 
-  // 🔥 UPDATE THESE WITH YOUR ACTUAL GITHUB REPOSITORY URLs
-  // Replace 'yourusername/quackquery' with your actual GitHub repo
-  const githubReleaseUrls = {
-    windows: 'https://github.com/yourusername/quackquery/releases/latest/download/QuackQuery-Setup.exe',
-    mac: 'https://github.com/yourusername/quackquery/releases/latest/download/QuackQuery.dmg',
-    linux: 'https://github.com/yourusername/quackquery/releases/latest/download/QuackQuery.AppImage'
+  // GitHub repository info - UPDATE THESE VALUES
+  const GITHUB_OWNER = process.env.GITHUB_OWNER || 'kushagra2503';
+  const GITHUB_REPO = process.env.GITHUB_REPO || 'Vision_Cheat';
+  const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // Personal Access Token
+
+  if (!GITHUB_TOKEN) {
+    return res.status(500).json({ error: 'GitHub access not configured' });
+  }
+
+  // Asset names for different platforms - UPDATE THESE TO MATCH YOUR RELEASE FILES
+  const assetNames = {
+    windows: 'QuackQuerySetup.exe',  // Matches your actual file name
+    mac: 'QuackQuery.dmg', 
+    linux: 'QuackQuery.AppImage'
   };
 
-  const downloadUrl = githubReleaseUrls[platform as keyof typeof githubReleaseUrls];
-  if (!downloadUrl) {
+  const assetName = assetNames[platform as keyof typeof assetNames];
+  if (!assetName) {
     return res.status(400).json({ error: 'Invalid platform' });
   }
 
-  // Update download stats
-  updateDownloadStats(user.plan);
+  try {
+    // Get latest release info from GitHub API
+    const fetch = (await import('node-fetch')).default;
+    const releaseResponse = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
+      {
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'QuackQuery-App'
+        }
+      }
+    );
 
-  // Log download
-  console.log(`GitHub Download: ${user.email} (SUDO) downloaded ${platform} version from GitHub`);
+    if (!releaseResponse.ok) {
+      throw new Error(`GitHub API error: ${releaseResponse.status}`);
+    }
 
-  res.json({ 
-    downloadUrl,
-    platform,
-    version: 'latest',
-    source: 'github',
-    directDownload: true
-  });
+    const release = await releaseResponse.json() as any;
+    
+    // Find the asset for the requested platform
+    const asset = release.assets?.find((asset: any) => asset.name === assetName);
+    
+    if (!asset) {
+      return res.status(404).json({ 
+        error: `No ${platform} release found. Available assets: ${release.assets?.map((a: any) => a.name).join(', ') || 'none'}` 
+      });
+    }
+
+    // For private repos, get the authenticated download URL
+    let downloadUrl = asset.url; // This requires authentication
+    
+    // Update download stats
+    updateDownloadStats(user.plan);
+
+    // Log download
+    console.log(`GitHub Download: ${user.email} (SUDO) downloaded ${platform} version from private GitHub repo`);
+
+    res.json({ 
+      downloadUrl,
+      platform,
+      version: release.tag_name || 'latest',
+      source: 'github-private',
+      directDownload: true,
+      assetName,
+      requiresAuth: true,
+      authHeader: `Bearer ${GITHUB_TOKEN}`
+    });
+
+  } catch (error) {
+    console.error('GitHub download error:', error);
+    res.status(500).json({ 
+      error: 'Failed to fetch release from GitHub',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // Admin Routes
@@ -599,7 +850,7 @@ app.get('/api/admin/stats', authenticateToken, requireAdmin, (req: any, res) => 
 
   const sudoUsers = allUsers.filter(u => u.isSudo);
 
-  const totalRevenue = totalPurchasedUsers * 5.20;
+      const totalRevenue = totalPurchasedUsers * 4.20;
 
   // Daily signup stats for the last 30 days
   const dailySignups: { [date: string]: number } = {};
@@ -759,7 +1010,7 @@ app.get('/api/plans', (req, res) => {
       {
         id: 'pro',
         name: 'Download QuackQuery',
-        price: 5.20,
+        price: 4.20,
         type: 'one_time',
         features: ['Lifetime access', 'Unlimited sessions', 'Advanced AI', 'Real-time assistance', 'Priority support', 'All future updates']
       },
@@ -780,6 +1031,62 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     status: "active"
   });
+});
+
+// Sync endpoint to bridge Better Auth sessions with our backend
+app.post('/api/auth/sync-session', async (req, res) => {
+  try {
+    const { email, name, action } = req.body; // action: 'login' or 'logout'
+    
+    if (!email || !action) {
+      return res.status(400).json({ error: 'Email and action are required' });
+    }
+
+    let user = Array.from(users.values()).find(u => u.email === email);
+    
+    // If user doesn't exist in our backend, create them
+    if (!user && action === 'login') {
+      // Check user's premium status from the database
+      const premiumStatus = await checkUserPremiumStatus(email);
+      
+      user = {
+        id: uuidv4(),
+        email,
+        password: '', // No password needed for Better Auth users
+        name: name || email.split('@')[0],
+        plan: premiumStatus.isPremium ? 'pro' : 'free',
+        isAdmin: premiumStatus.isAdmin,
+        isSudo: premiumStatus.isSudo,
+        createdAt: new Date(),
+        lifetimeAccess: premiumStatus.isPremium
+      };
+      users.set(user.id, user);
+      console.log(`Created new user from Better Auth: ${email}, isPremium: ${premiumStatus.isPremium}, isSudo: ${premiumStatus.isSudo}`);
+    } else if (user && action === 'login') {
+      // Update existing user's premium status
+      const premiumStatus = await checkUserPremiumStatus(email);
+      user.plan = premiumStatus.isPremium ? 'pro' : 'free';
+      user.isAdmin = premiumStatus.isAdmin;
+      user.isSudo = premiumStatus.isSudo;
+      user.lifetimeAccess = premiumStatus.isPremium;
+      console.log(`Updated user premium status: ${email}, isPremium: ${premiumStatus.isPremium}, isSudo: ${premiumStatus.isSudo}`);
+    }
+    
+    if (user) {
+      if (action === 'login') {
+        user.lastLogin = new Date();
+        console.log(`Synced login for user: ${email} at ${user.lastLogin}`);
+      } else if (action === 'logout') {
+        user.lastLogout = new Date();
+        console.log(`Synced logout for user: ${email} at ${user.lastLogout}`);
+      }
+    }
+
+    res.json({ success: true, message: `Session ${action} synced successfully` });
+  } catch (error) {
+    console.error('Session sync error:', error);
+    res.status(500).json({ error: 'Session sync failed' });
+  }
 });
 
 // Error handling middleware
@@ -811,6 +1118,7 @@ app.listen(port, () => {
       isAdmin: true,
       isSudo: true,
       createdAt: new Date(),
+      lifetimeAccess: true,
     };
     users.set(adminId, defaultAdmin);
           console.log('Default admin user created: radhikayash2@gmail.com / admin123');

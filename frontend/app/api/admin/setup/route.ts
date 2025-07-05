@@ -40,44 +40,52 @@ export async function GET(req: NextRequest) {
 }
 
 // POST: Make current user the first admin (only if no admins exist)
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const session = await auth.api.getSession({ headers: req.headers });
+    const adminEmail = "radhikayash2@gmail.com";
     
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Check if any admin already exists
-    const existingAdmins = await db
+    console.log(`🔧 ADMIN SETUP: Making ${adminEmail} an admin user...`);
+    
+    // Check if user exists
+    const existingUser = await db
       .select()
       .from(user)
-      .where(eq(user.isAdmin, true))
+      .where(eq(user.email, adminEmail))
       .limit(1);
 
-    if (existingAdmins.length > 0) {
-      return NextResponse.json({ 
-        error: "Admin already exists. Only one admin can be set up this way." 
-      }, { status: 409 });
+    if (existingUser.length === 0) {
+      return NextResponse.json({
+        success: false,
+        message: `User ${adminEmail} not found. Please sign up first, then run this endpoint.`
+      }, { status: 404 });
     }
 
-    // Make current user an admin
-    const updatedUser = await db
+    // Update user to be admin
+    await db
       .update(user)
-      .set({ isAdmin: true, updatedAt: new Date() })
-      .where(eq(user.id, session.user.id))
-      .returning();
+      .set({
+        isAdmin: true,
+        updatedAt: new Date()
+      })
+      .where(eq(user.email, adminEmail));
 
-    if (updatedUser.length === 0) {
-      return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
-    }
+    console.log(`✅ ADMIN SETUP: ${adminEmail} is now an admin user!`);
 
-    return NextResponse.json({ 
-      message: "Successfully set up as admin!", 
-      user: updatedUser[0] 
+    return NextResponse.json({
+      success: true,
+      message: `Successfully made ${adminEmail} an admin user`,
+      user: {
+        id: existingUser[0].id,
+        email: existingUser[0].email,
+        isAdmin: true
+      }
     });
+
   } catch (error) {
-    console.error("Error setting up admin:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error('❌ ADMIN SETUP ERROR:', error);
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to set up admin user'
+    }, { status: 500 });
   }
 } 

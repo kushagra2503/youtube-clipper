@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
-import Image from "next/image";
 import Navbar from "@/components/core-ui/navbar";
 
 const fadeUpVariants = {
@@ -25,13 +24,6 @@ export default function App() {
               animate="animate"
               transition={{ duration: 0.5 }}
             >
-              <Image
-                src="/assets/duck.png"
-                alt="QuackQuery Duck Logo"
-                width={80}
-                height={80}
-                className="rounded-2xl shadow-lg"
-              />
             </motion.div>
             <motion.h1
               className={`text-4xl md:text-5xl font-medium tracking-tight text-white`}
@@ -50,8 +42,7 @@ export default function App() {
               animate="animate"
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              Your AI interview assistant that sees what you see and hears what
-              you hear.
+              Your AI co-pilot that stays in your desktop and sees what you see and hears what you hear.
             </motion.p>
           </div>
 
@@ -75,7 +66,7 @@ export default function App() {
         </div>
 
         {/* Demo Video Section */}
-        <motion.div
+        {/* <motion.div
           className="relative"
           variants={fadeUpVariants}
           initial="initial"
@@ -92,7 +83,7 @@ export default function App() {
               src="/clippa.mp4"
             />
           </div>
-        </motion.div>
+        </motion.div> */}
 
         <footer className="text-sm text-white/70 flex items-center gap-2">
           <p>© 2025 QuackQuery. All rights reserved to </p>

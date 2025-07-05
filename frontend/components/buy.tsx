@@ -106,11 +106,11 @@ export default function Buy({
             <ul className="flex flex-col gap-2 mb-4">
               <li className="flex items-center gap-2">
                 <span>🧠</span>
-                Advanced AI assistance for all interview types
+                Advanced AI assistance for all types
               </li>
               <li className="flex items-center gap-2">
                 <span>🚀</span>
-                Unlimited interview sessions with real-time help
+                Unlimited AI sessions with real-time help
               </li>
               <li className="flex items-center gap-2">
                 <span>🔒</span>
@@ -122,7 +122,7 @@ export default function Buy({
               </li>
               <li className="flex items-center gap-2">
                 <span>❤️</span>
-                Lifetime access with your one-time purchase
+                Contribute to developer, for maintainance and updates
               </li>
             </ul>
           </>

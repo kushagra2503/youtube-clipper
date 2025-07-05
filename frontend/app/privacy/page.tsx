@@ -1,4 +1,4 @@
-export default function Privacy() {
+export default function Privacy() { // Privacy Policy for QuackQuery
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
       <h1 className="text-3xl font-bold mb-8 text-white">Privacy Policy</h1>
@@ -9,10 +9,8 @@ export default function Privacy() {
             1. Information We Collect
           </h2>
           <p className="text-white/80">
-            We collect the minimum information required to operate the YouTube
-            Clipper service. This includes your email address for account
-            authentication and the URLs of the YouTube videos you choose to
-            clip. We do <strong className="text-white">not</strong> collect the actual video content.
+            We collect the minimum information required to operate QuackQuery. This includes your email address for account
+            authentication and the context you provide to quackquery. We do <strong className="text-white">not</strong> save your data in our database.
           </p>
         </div>
 
@@ -21,9 +19,8 @@ export default function Privacy() {
             2. How We Use Information
           </h2>
           <p className="text-white/80">
-            Your information is used exclusively to generate and store video
-            clip timestamps, manage your personal library, and improve our
-            product. We never sell or share your data for advertising purposes.
+            Your information is used exclusively for payments and provide better 
+            assistance to you.
           </p>
         </div>
 
@@ -41,18 +38,18 @@ export default function Privacy() {
             4. Third-Party Services
           </h2>
           <p className="text-white/80">
-            We rely on YouTube&#39;s public APIs to fetch video metadata. All
-            interactions remain within the scope permitted by YouTube&#39;s
-            Terms of Service. We also use secure payment processors to handle
-            any premium subscriptions; payment details never touch our servers.
+            We rely on several  APIs and services to handle the functionality. All
+            interactions remain within the scope permitted by the providers
+            Terms of Services. We also use secure payment processors to handle
+            any payment details never touch our servers.
           </p>
         </div>
 
         <div>
           <h2 className="text-xl font-semibold mb-3 text-white">5. Data Retention</h2>
           <p className="text-white/80">
-            Clip data and account details are retained for as long as your
-            account is active. Mail us to delete your account.
+            Your data and account details are retained for as long as your
+            account is active. Mail us to delete your account if you wish to.
           </p>
         </div>
 
@@ -62,7 +59,7 @@ export default function Privacy() {
             You have the right to access, export, or request deletion of the
             data we hold about you. Email <br />
             <a href="mailto:radhikayash2@gmail.com" className="underline text-white hover:text-white/80">
-              privacy@ytclipper.app
+              radhikayash2@gmail.com
             </a>
             {" "}to initiate any request.
           </p>
@@ -100,7 +97,7 @@ export default function Privacy() {
         <div>
           <h2 className="text-xl font-semibold mb-3 text-white">10. Contact Us</h2>
           <p className="text-white/80">
-            Questions about privacy? Reach out at <br />
+            Worried about your privacy? Reach out at <br />
             <a href="mailto:radhikayash2@gmail.com" className="underline text-white hover:text-white/80">
               radhikayash2@gmail.com
             </a>

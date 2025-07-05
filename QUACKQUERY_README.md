@@ -49,7 +49,7 @@ youtube-clipper/
 ### Backend Features
 - **User Management**: Registration, login, plan management
 - **Payment Processing**: Stripe subscriptions with webhooks
-- **Download Control**: Platform-specific downloads with access control
+- **Download Control**: Windows application downloads with access control
 - **Admin APIs**: User management, statistics, system settings
 - **Sudo APIs**: System logs, email broadcasting
 - **Email Integration**: Welcome emails, payment confirmations
@@ -68,7 +68,7 @@ youtube-clipper/
 3. **Download (/download)**:
    - Checks user authentication + plan
    - Free users → redirected to `/pricing`
-   - Premium users → platform-specific download URLs
+   - Premium users → Windows application download
    - Real-time download verification
 
 4. **Admin (/admin)**:
@@ -156,7 +156,8 @@ FROM_EMAIL=QuackQuery <noreply@quackquery.app>
 
 ### Downloads
 - `GET /api/download/check` - Check download eligibility
-- `GET /api/download/:platform` - Download platform-specific app
+- `GET /api/download` - Download Windows app for paying users (streams file)
+- `GET /api/download/github` - Download Windows app for sudo users (streams file)
 
 ### Admin (requires admin role)
 - `GET /api/admin/stats` - User and download statistics
@@ -231,9 +232,7 @@ const db = drizzle(client)
 Replace local URLs with CDN:
 ```typescript
 const downloadUrls = {
-  windows: 'https://cdn.quackquery.app/QuackQuery-Setup-1.0.0.exe',
-  mac: 'https://cdn.quackquery.app/QuackQuery-1.0.0.dmg',
-  linux: 'https://cdn.quackquery.app/QuackQuery-1.0.0.AppImage'
+  windows: 'https://cdn.quackquery.app/QuackQuery-Setup-1.0.0.exe'
 }
 ```
 
@@ -253,6 +252,6 @@ const downloadUrls = {
 ✅ **Email System**: Welcome and confirmation emails
 ✅ **UI Consistency**: Maintained glassmorphism design throughout
 ✅ **Authentication**: JWT-based auth with role management
-✅ **Platform Detection**: Windows/Mac/Linux download support
+✅ **Platform Support**: Windows download support (Mac/Linux coming soon)
 
 The QuackQuery platform is now a complete, production-ready SaaS application with proper user management, payment processing, and admin controls. 

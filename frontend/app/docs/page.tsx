@@ -21,10 +21,10 @@ export default function DocsPage() {
           transition={{ duration: 0.5 }}
         >
           <h1 className="text-4xl md:text-5xl font-medium tracking-tight text-white mb-4">
-            QuackQuery Documentation
+            Getting Started 
           </h1>
           <p className="text-white/80 text-lg max-w-2xl mx-auto">
-            Learn how to use QuackQuery to ace your interviews with AI-powered assistance
+            Learn how to use QuackQuery to do your tasks with AI-powered assistance
           </p>
         </motion.div>
 
@@ -44,15 +44,15 @@ export default function DocsPage() {
             <div className="space-y-4 text-white/80">
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">1. Download & Install</h3>
-                <p>Download the QuackQuery Electron app for your operating system. Available for Windows, macOS, and Linux.</p>
+                <p>Download the QuackQuery Windows application. Currently available for Windows only.</p>
               </div>
               <div>
                 <h3 className="text-lg font-medium text-white mb-2">2. Grant Permissions</h3>
                 <p>Allow QuackQuery to access your screen and microphone. These permissions are essential for the AI to assist you effectively.</p>
               </div>
               <div>
-                <h3 className="text-lg font-medium text-white mb-2">3. Start Your Interview</h3>
-                <p>Launch QuackQuery before your interview call. The AI will automatically start monitoring and providing assistance.</p>
+                <h3 className="text-lg font-medium text-white mb-2">3. Start Your Session</h3>
+                <p>Launch QuackQuery, the AI will automatically start monitoring and providing assistance.</p>
               </div>
             </div>
           </motion.section>
@@ -85,7 +85,7 @@ export default function DocsPage() {
                   <h3 className="text-lg font-medium text-white">Audio Processing</h3>
                 </div>
                 <p className="text-white/70 text-sm">
-                  Listens to interview conversations and provides contextual responses
+                  Listens to all conversations and provides contextual responses
                 </p>
               </div>
               <div className="space-y-3">
@@ -176,7 +176,7 @@ export default function DocsPage() {
               </div>
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <h3 className="text-white font-medium mb-2">🔒 Privacy</h3>
-                <p className="text-sm">All data processing happens locally. QuackQuery doesn't store or transmit your interview content.</p>
+                <p className="text-sm">All data processing happens locally. QuackQuery doesn&apos;t store or transmit your interview content.</p>
               </div>
             </div>
           </motion.section>
@@ -193,7 +193,7 @@ export default function DocsPage() {
             <div className="space-y-4">
               <div>
                 <h3 className="text-white font-medium mb-2">Is QuackQuery detectable?</h3>
-                <p className="text-white/70 text-sm">QuackQuery runs as a standard desktop application and doesn't inject into browser processes, making it undetectable by standard interview platforms.</p>
+                <p className="text-white/70 text-sm">QuackQuery runs as a standard desktop application and doesn&apos;t inject into browser processes, making it undetectable by various platform platforms.</p>
               </div>
               <div>
                 <h3 className="text-white font-medium mb-2">What platforms does it support?</h3>
@@ -201,7 +201,7 @@ export default function DocsPage() {
               </div>
               <div>
                 <h3 className="text-white font-medium mb-2">How accurate are the AI responses?</h3>
-                <p className="text-white/70 text-sm">QuackQuery uses advanced AI models trained on technical content, providing highly accurate and contextual responses for most interview scenarios.</p>
+                <p className="text-white/70 text-sm">QuackQuery uses advanced AI models trained on technical content, providing highly accurate and contextual responses for most technical scenarios.</p>
               </div>
             </div>
           </motion.section>

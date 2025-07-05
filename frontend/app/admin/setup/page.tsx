@@ -62,6 +62,25 @@ export default function AdminSetupPage() {
     }
   };
 
+  const addSudoUser = async (email: string) => {
+    try {
+      const response = await fetch('/api/admin/sudo-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase() })
+      });
+      
+      if (response.ok) {
+        alert(`Added ${email} as sudo user`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to add sudo user: ${error.error}`);
+      }
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   useEffect(() => {
     if (session?.user) {
       checkSetupStatus();

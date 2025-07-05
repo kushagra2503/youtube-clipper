@@ -133,7 +133,7 @@ export default function AdminDashboard() {
         setStats(realStats);
       } else {
         console.error('Failed to fetch admin stats:', statsResponse.statusText);
-        setStats(null);
+      setStats(null);
       }
 
       // Fetch real settings from the API
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
         setSettings(realSettings);
       } else {
         console.error('Failed to fetch admin settings:', settingsResponse.statusText);
-        setSettings(null);
+      setSettings(null);
       }
     } catch (error) {
       console.error('Failed to fetch admin data:', error);
@@ -184,7 +184,7 @@ export default function AdminDashboard() {
         setSudoUsers(data.sudoUsers || []);
       } else {
         console.error('Failed to fetch sudo users:', response.statusText);
-        setSudoUsers([]);
+      setSudoUsers([]);
       }
     } catch (error) {
       console.error('Failed to fetch sudo users:', error);
@@ -209,7 +209,7 @@ export default function AdminDashboard() {
       const data = await response.json();
 
       if (response.ok) {
-        setNewSudoEmail('');
+      setNewSudoEmail('');
         await fetchSudoUsers(); // Refresh the list
         alert(`Successfully added ${data.sudoUser.email} as sudo user!`);
       } else {
@@ -422,39 +422,39 @@ export default function AdminDashboard() {
 
             {/* Recent Activity */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Users */}
-              <Card className="bg-white/10 backdrop-blur-sm border-white/20 p-6">
-                <h3 className="text-xl font-semibold text-white mb-4">Recent Users</h3>
+            {/* Recent Users */}
+            <Card className="bg-white/10 backdrop-blur-sm border-white/20 p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Recent Users</h3>
                 {stats && stats.recentUsers && stats.recentUsers.length > 0 ? (
                   <div className="space-y-3 max-h-64 overflow-y-auto">
                     {stats.recentUsers.slice(0, 5).map(user => (
-                      <div key={user.id} className="flex items-center justify-between py-2 border-b border-white/10">
-                        <div>
+                    <div key={user.id} className="flex items-center justify-between py-2 border-b border-white/10">
+                      <div>
                           <div className="text-white font-medium flex items-center gap-2">
                             {user.name || user.email.split('@')[0]}
                             {user.isSudo && <Shield className="w-3 h-3 text-yellow-400" />}
                             {user.isAdmin && <Settings className="w-3 h-3 text-red-400" />}
                           </div>
-                          <div className="text-white/60 text-sm">{user.email}</div>
-                        </div>
-                        <div className="text-right">
+                        <div className="text-white/60 text-sm">{user.email}</div>
+                      </div>
+                      <div className="text-right">
                           <div className={`text-xs px-2 py-1 rounded ${
-                            user.plan === 'free' ? 'bg-gray-500/20 text-gray-300' :
-                            user.plan === 'pro' ? 'bg-purple-500/20 text-purple-300' :
-                            'bg-pink-500/20 text-pink-300'
-                          }`}>
-                            {user.plan}
-                          </div>
-                          <div className="text-white/60 text-xs mt-1">
-                            {new Date(user.createdAt).toLocaleDateString()}
-                          </div>
+                          user.plan === 'free' ? 'bg-gray-500/20 text-gray-300' :
+                          user.plan === 'pro' ? 'bg-purple-500/20 text-purple-300' :
+                          'bg-pink-500/20 text-pink-300'
+                        }`}>
+                          {user.plan}
+                        </div>
+                        <div className="text-white/60 text-xs mt-1">
+                          {new Date(user.createdAt).toLocaleDateString()}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-white/60">
-                    <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-white/60">
+                  <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>No users yet</p>
                     <p className="text-sm">Users will appear here when they sign up</p>
                   </div>
@@ -473,7 +473,7 @@ export default function AdminDashboard() {
                           <div className="text-white/60 text-sm">{purchase.email}</div>
                         </div>
                         <div className="text-right">
-                          <div className="text-green-400 text-sm font-medium">$5.20</div>
+                          <div className="text-green-400 text-sm font-medium">$4.20</div>
                           <div className="text-white/60 text-xs">
                             {new Date(purchase.purchaseDate).toLocaleDateString()}
                           </div>
@@ -486,9 +486,9 @@ export default function AdminDashboard() {
                     <Download className="w-12 h-12 mx-auto mb-3 opacity-50" />
                     <p>No purchases yet</p>
                     <p className="text-sm">Purchases will appear here when users buy the app</p>
-                  </div>
-                )}
-              </Card>
+                </div>
+              )}
+            </Card>
             </div>
           </motion.div>
         )}
@@ -602,7 +602,7 @@ export default function AdminDashboard() {
                         <div className="text-green-400 text-xs">Payment ID: {purchase.paymentId}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-green-400 text-lg font-bold">$5.20</div>
+                        <div className="text-green-400 text-lg font-bold">$4.20</div>
                         <div className="text-white/60 text-xs">
                           {new Date(purchase.purchaseDate).toLocaleDateString()}
                         </div>

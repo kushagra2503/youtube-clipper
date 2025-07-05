@@ -275,7 +275,32 @@ export default function Editor() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Call our backend session sync endpoint
+      const response = await fetch('http://localhost:3001/api/auth/sync-session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: session?.user?.email,
+          name: session?.user?.name,
+          action: 'logout'
+        }),
+      });
+      
+      if (response.ok) {
+        console.log('Backend logout sync successful');
+      } else {
+        console.warn('Backend logout sync failed:', await response.text());
+      }
+    } catch (error) {
+      console.warn('Backend logout sync error:', error);
+    }
+    
+    // Then call Better Auth signOut
     authClient.signOut();
   };
 

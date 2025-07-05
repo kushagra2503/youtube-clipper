@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import Navbar from "@/components/core-ui/navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Users, Download, Settings, BarChart3, Shield, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -69,12 +70,17 @@ export default function AdminDashboard() {
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'settings'>('stats');
+  const [isActivating, setIsActivating] = useState(false);
+  const [activationResult, setActivationResult] = useState<string | null>(null);
+  const [newSudoEmail, setNewSudoEmail] = useState('');
+  const [isAddingSudo, setIsAddingSudo] = useState(false);
+  const [sudoMessage, setSudoMessage] = useState<string | null>(null);
   const { data: session } = authClient.useSession();
   const router = useRouter();
 
   useEffect(() => {
     if (session) {
-      checkAdminAccess();
+    checkAdminAccess();
     } else {
       router.push('/login');
     }
@@ -107,7 +113,7 @@ export default function AdminDashboard() {
     try {
       // Fetch real data from the admin stats API
       const statsResponse = await fetch('/api/admin/stats');
-      
+
       if (statsResponse.ok) {
         const realStats = await statsResponse.json();
         setStats(realStats);
@@ -193,6 +199,100 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error('Failed to update settings:', error);
+    }
+  };
+
+  const activatePendingPayments = async () => {
+    setIsActivating(true);
+    setActivationResult(null);
+    
+    try {
+      const response = await fetch('/api/admin/activate-pending', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setActivationResult(`✅ Success: ${result.message}`);
+        // Refresh stats to show updated user counts
+        fetchAdminData();
+      } else {
+        const error = await response.json();
+        setActivationResult(`❌ Error: ${error.error || 'Failed to activate pending payments'}`);
+      }
+    } catch (error) {
+      console.error('Failed to activate pending payments:', error);
+      setActivationResult('❌ Error: Network error occurred');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const addSudoUser = async () => {
+    if (!newSudoEmail.trim()) {
+      setSudoMessage('❌ Error: Email is required');
+      return;
+    }
+
+    setIsAddingSudo(true);
+    setSudoMessage(null);
+    
+    try {
+      const response = await fetch('/api/admin/sudo-users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: newSudoEmail.trim() })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSudoMessage(`✅ Success: ${result.message}`);
+        setNewSudoEmail('');
+        // Refresh stats to show updated user counts
+        fetchAdminData();
+      } else {
+        setSudoMessage(`❌ Error: ${result.error || 'Failed to add sudo user'}`);
+      }
+    } catch (error) {
+      console.error('Failed to add sudo user:', error);
+      setSudoMessage('❌ Error: Network error occurred');
+    } finally {
+      setIsAddingSudo(false);
+    }
+  };
+
+  const removeSudoUser = async (email: string) => {
+    if (!confirm(`Remove ${email} from sudo users?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin/sudo-users', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSudoMessage(`✅ Success: ${result.message}`);
+        // Refresh stats to show updated user counts
+        fetchAdminData();
+      } else {
+        setSudoMessage(`❌ Error: ${result.error || 'Failed to remove sudo user'}`);
+      }
+    } catch (error) {
+      console.error('Failed to remove sudo user:', error);
+      setSudoMessage('❌ Error: Network error occurred');
     }
   };
 
@@ -382,7 +482,7 @@ export default function AdminDashboard() {
                       <div className="text-purple-400 text-xs">Payment ID: {purchase.paymentId}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-green-400 text-sm font-medium">$5.20</div>
+                      <div className="text-green-400 text-sm font-medium">$4.20</div>
                       <div className="text-white/60 text-xs">
                         {new Date(purchase.purchaseDate).toLocaleDateString()}
                       </div>
@@ -479,8 +579,96 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </Card>
-          </motion.div>
-        )}
+
+            <Card className="bg-white/10 backdrop-blur-sm border-white/20 p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Payment Management</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-white font-medium">Activate Pending Payments</div>
+                    <div className="text-white/60 text-sm">Link existing pending payments to user accounts</div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={activatePendingPayments}
+                    disabled={isActivating}
+                  >
+                    {isActivating ? 'Activating...' : 'Activate Now'}
+                  </Button>
+                </div>
+                {activationResult && (
+                  <div className={`p-3 rounded-md text-sm ${
+                    activationResult.startsWith('✅') 
+                      ? 'bg-green-500/20 border border-green-500/40 text-green-300'
+                      : 'bg-red-500/20 border border-red-500/40 text-red-300'
+                  }`}>
+                    {activationResult}
+                  </div>
+                                 )}
+               </div>
+             </Card>
+
+             <Card className="bg-white/10 backdrop-blur-sm border-white/20 p-6">
+               <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                 <Shield className="w-5 h-5 text-yellow-400" />
+                 Sudo User Management
+               </h3>
+               <div className="space-y-4">
+                 <div className="flex gap-3">
+                   <Input
+                     type="email"
+                     placeholder="Enter email to add as sudo user"
+                     value={newSudoEmail}
+                     onChange={(e) => setNewSudoEmail(e.target.value)}
+                     className="flex-1 bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                   />
+                   <Button
+                     onClick={addSudoUser}
+                     disabled={isAddingSudo}
+                     variant="outline"
+                   >
+                     {isAddingSudo ? 'Adding...' : 'Add Sudo User'}
+                   </Button>
+                 </div>
+                 {sudoMessage && (
+                   <div className={`p-3 rounded-md text-sm ${
+                     sudoMessage.startsWith('✅') 
+                       ? 'bg-green-500/20 border border-green-500/40 text-green-300'
+                       : 'bg-red-500/20 border border-red-500/40 text-red-300'
+                   }`}>
+                     {sudoMessage}
+                   </div>
+                 )}
+                 
+                 {/* Current Sudo Users */}
+                 {stats && stats.sudoUsers.length > 0 && (
+                   <div className="mt-6">
+                     <h4 className="text-lg font-semibold text-white mb-3">Current Sudo Users</h4>
+                     <div className="space-y-2">
+                       {stats.sudoUsers.map(sudoUser => (
+                         <div key={sudoUser.id} className="flex items-center justify-between p-3 bg-white/5 rounded-md border border-white/10">
+                           <div>
+                             <div className="text-white font-medium">{sudoUser.email}</div>
+                             <div className="text-white/60 text-sm">
+                               Added: {new Date(sudoUser.createdAt).toLocaleDateString()}
+                             </div>
+                           </div>
+                           <Button
+                             onClick={() => removeSudoUser(sudoUser.email)}
+                             variant="destructive"
+                             size="sm"
+                           >
+                             Remove
+                           </Button>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 )}
+               </div>
+             </Card>
+           </motion.div>
+         )}
       </main>
     </>
   );

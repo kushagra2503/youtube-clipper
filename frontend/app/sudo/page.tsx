@@ -169,13 +169,13 @@ export default function SudoDashboard() {
         >
           <div className="bg-red-500/10 backdrop-blur-sm rounded-lg p-1 border border-red-500/20">
             {[
-              { id: 'logs', label: 'System Logs', icon: Activity },
-              { id: 'broadcast', label: 'Broadcast', icon: Send },
-              { id: 'system', label: 'System Info', icon: Server }
+              { id: 'logs' as const, label: 'System Logs', icon: Activity },
+              { id: 'broadcast' as const, label: 'Broadcast', icon: Send },
+              { id: 'system' as const, label: 'System Info', icon: Server }
             ].map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-6 py-3 rounded-md transition-all ${
                   activeTab === tab.id
                     ? 'bg-red-500/20 text-white'
@@ -264,7 +264,7 @@ export default function SudoDashboard() {
                   </label>
                   <select
                     value={targetPlan}
-                    onChange={(e) => setTargetPlan(e.target.value as any)}
+                    onChange={(e) => setTargetPlan(e.target.value as 'all' | 'free' | 'pro' | 'enterprise')}
                     className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white"
                   >
                     <option value="all">All Users</option>

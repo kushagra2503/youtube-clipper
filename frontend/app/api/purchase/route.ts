@@ -2,10 +2,6 @@ import { NextResponse } from 'next/server';
 import { dodopayments } from '@/lib/dodopayments';
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import db from "@/lib/db";
-import { payment } from "@/lib/schema";
-import { eq } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
 
 export async function POST(request: Request) {
   try {
@@ -22,20 +18,7 @@ export async function POST(request: Request) {
     const userId = session.user.id;
     const userEmail = session.user.email;
 
-    // Check if user already has an active payment
-    const existingPayment = await db
-      .select()
-      .from(payment)
-      .where(eq(payment.userId, userId))
-      .limit(1);
-
-    if (existingPayment.length > 0 && existingPayment[0].status === "active") {
-      return NextResponse.json({ 
-        error: "User already has lifetime access" 
-      }, { status: 409 });
-    }
-
-    // Create a one-time payment instead of a subscription
+    // Create a one-time payment using DodoPayments
     const response = await dodopayments.payments.create({
       billing: {
         city: body.billing.city,
@@ -54,20 +37,9 @@ export async function POST(request: Request) {
       metadata: {
         user_id: userId,
         payment_type: "one_time",
-        plan_type: body.product_id === "pro_monthly" ? "pro" : "enterprise"
+        plan_type: body.product_id === "pdt_4oP8pxxo66BVMQoPG4JrP" ? "pro" : "enterprise"
       },
     });
-
-    // Create a pending payment record in the database
-    if (response.payment_link) {
-      await db.insert(payment).values({
-        id: uuidv4(),
-        userId: userId,
-        status: "pending",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
     
     return NextResponse.json(response);
   } catch (error) {
