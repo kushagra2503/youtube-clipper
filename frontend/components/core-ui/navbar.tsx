@@ -91,7 +91,7 @@ export default function Navbar() {
             href="/pricing" 
             className="text-white/80 hover:text-white transition-colors font-medium"
           >
-            Pricing
+            Contribute
           </Link>
         </div>
 
@@ -105,7 +105,9 @@ export default function Navbar() {
                   className="h-10 w-10 rounded-full bg-white/10 border border-white/20 hover:bg-white/20 p-0"
                 >
                   {session.user.image ? (
-                    <img 
+                    <Image 
+                      width={40}
+                      height={40}
                       src={session.user.image} 
                       alt={session.user.name || "User"} 
                       className="h-8 w-8 rounded-full"

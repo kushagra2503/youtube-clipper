@@ -12,7 +12,7 @@ const font = Host_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "QuackQuery - AI Interview Assistant | Screen Reading & Audio Processing",
+  title: "QuackQuery - AI Co-pilot | Screen Reading & Audio Processing",
   description:
     "AI-powered assistant that sees your screen and hears your calls. Get real-time help with coding questions, behavioral interviews, and system design. Privacy-first with local processing. 🧠",
   keywords:
