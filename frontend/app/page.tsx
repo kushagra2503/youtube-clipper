@@ -23,8 +23,7 @@ export default function App() {
               initial="initial"
               animate="animate"
               transition={{ duration: 0.5 }}
-            >
-            </motion.div>
+            ></motion.div>
             <motion.h1
               className={`text-4xl md:text-5xl font-medium tracking-tight text-white`}
               variants={fadeUpVariants}
@@ -42,7 +41,8 @@ export default function App() {
               animate="animate"
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              Your AI co-pilot that stays in your desktop and sees what you see and hears what you hear.
+              Your AI co-pilot that stays in your desktop and sees what you see
+              and hears what you hear.
             </motion.p>
           </div>
 
