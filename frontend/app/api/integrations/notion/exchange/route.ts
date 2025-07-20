@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { saveToken } from "@/utils/db";
 const NOTION_CLIENT_SECRET =
   "secret_I89BNnSV5kkeQabmDLnsrd6se42gcTHhFKVv6Yb5R2c";
 
@@ -66,7 +67,25 @@ export async function POST(request: NextRequest) {
 
     if (data.access_token) {
       console.log(`✅ Successfully got Notion token for ${user}`);
-
+      try {
+        await saveToken(user, "Notion", data.access_token);
+        console.log(`🔐 Token saved to database for user: ${user}`);
+      } catch (saveError) {
+        console.error("❌ Failed to save token to database:", saveError);
+        // You might want to still return success since the OAuth worked,
+        // but log the database error
+        return NextResponse.json(
+          {
+            success: false,
+            message: "OAuth successful but failed to save token to database",
+            error:
+              saveError instanceof Error
+                ? saveError.message
+                : "Unknown database error",
+          },
+          { status: 500 },
+        );
+      }
       return NextResponse.json({
         success: true,
         token: data.access_token,

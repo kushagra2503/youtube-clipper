@@ -26,7 +26,7 @@ export async function saveToken(name: string, toolName: string, token: string) {
     }
 
     const userId = userData.id;
-
+    console.log(toolName);
     // 2. ✅ Get tool_id by tool name
     let { data: toolData, error: toolError } = await supabase
       .from("tools")
