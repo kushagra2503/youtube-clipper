@@ -1,10 +1,12 @@
 "use client";
+
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/core-ui/navbar";
 import { ConnectGoogle } from "@/utils/connectGoogle";
+import { ConnectNotion } from "@/utils/connectNotion";
 
 const fadeUpVariants = {
   initial: { opacity: 0, y: 20 },
@@ -12,7 +14,7 @@ const fadeUpVariants = {
 };
 
 interface Integration {
-  name: string;
+  name: "Google" | "Notion" | "Twitter";
   connected: boolean;
 }
 
@@ -49,8 +51,20 @@ export default function IntegrationPage() {
               i.name === integrationName ? { ...i, connected: true } : i,
             ),
           );
+        }
+      } else if (integrationName === "Notion") {
+        console.log("🔗 Starting Notion connection...");
+        const success = await ConnectNotion({ name: userName });
+
+        if (success) {
+          console.log("✅ Notion connected!");
+          setIntegrations((prev) =>
+            prev.map((i) =>
+              i.name === integrationName ? { ...i, connected: true } : i,
+            ),
+          );
         } else {
-          console.warn("⚠️ Google connection failed or cancelled.");
+          console.warn("⚠️ Notion connection failed or cancelled.");
         }
       } else {
         alert(`${integrationName} integration not implemented yet.`);
@@ -59,7 +73,7 @@ export default function IntegrationPage() {
       console.error(`❌ Failed to connect ${integrationName}:`, err);
       alert(`Failed to connect ${integrationName}. Check console for details.`);
     }
-  }
+  } // ✅ <-- FIXED: properly closed the function
 
   return (
     <>
