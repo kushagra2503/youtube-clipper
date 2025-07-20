@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveToken } from "@/utils/db";
 const NOTION_CLIENT_SECRET =
-  "secret_I89BNnSV5kkeQabmDLnsrd6se42gcTHhFKVv6Yb5R2c";
+  "secret_ArnWxqD0hR3DV5cGCBD08HdHJSo255Y4v67TBIRLF9T";
 
-const NOTION_CLIENT_ID = "236d872b-594c-80b5-98a1-00375b3c6358";
+const NOTION_CLIENT_ID = "236d872b-594c-8026-b10a-003713acb854";
 
 const REDIRECT_URI = "http://localhost:3000/oauth/notion-callback/";
 

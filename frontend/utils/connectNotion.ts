@@ -1,4 +1,4 @@
-const NOTION_CLIENT_ID = "236d872b-594c-80b5-98a1-00375b3c6358";
+const NOTION_CLIENT_ID = "236d872b-594c-8026-b10a-003713acb854";
 const REDIRECT_URI = "http://localhost:3000/oauth/notion-callback/"; // ✅ Added trailing slash
 const NOTION_OAUTH_URL = `https://api.notion.com/v1/oauth/authorize?client_id=${NOTION_CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
 
